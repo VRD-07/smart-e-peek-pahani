@@ -1,0 +1,75 @@
+# =========================
+# ENVIRONMENT / SECRETS
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# DEPENDENCIES
+# =========================
+node_modules/
+**/node_modules/
+
+# =========================
+# BUILD OUTPUT
+# =========================
+dist/
+**/dist/
+build/
+**/build/
+
+# =========================
+# LOGS
+# =========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =========================
+# CACHE / TEMP
+# =========================
+.cache/
+.vite/
+.temp/
+tmp/
+temp/
+
+# =========================
+# TEST / COVERAGE
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# EDITOR
+# =========================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# =========================
+# LOCAL AI / AGENT FILES
+# =========================
+.gemini/
+.claude/
+
+# =========================
+# LOCAL DATABASE / STORAGE
+# =========================
+*.sqlite
+*.sqlite3
+*.db
+
+# =========================
+# PUPPETEER / PLAYWRIGHT
+# =========================
+.puppeteer/
+.playwright/
