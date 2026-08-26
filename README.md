@@ -56,6 +56,7 @@ This architecture does not just digitize a paper process—it hardens it. By enf
 | **Officer Dashboard** | Role-protected `GET /api/submissions` endpoint plus a global review console: every submission across all farmers and Gats, filterable by outcome / Gat / district / date range, viewable as a sortable table or a Leaflet map with outcome-coloured pins. |
 | **Farmer Awareness Module** | Scheduled WhatsApp sweep that reminds farmers with nothing on file before a season's filing deadline closes, plus a one-time "what E-Peek Pahani is and why it matters" message on first contact from a new number. Every send is de-duplicated and logged, and messages go out in the farmer's own language. |
 | **Calamity-Relief Matching** | When a calamity is declared, the declared polygon is intersected against every Gat boundary using the same Turf.js geometry as the validation engine. Farmers whose **verified** filing sits inside the zone are told on WhatsApp that their record may qualify them for relief, and the officer dashboard gains a *Relief eligible* badge and filter. Crop-scoped declarations only sweep in the crops they name, and a filing created *after* the declaration is never matched. |
+| **Voice-Assisted Crop Entry** | A farmer who cannot type Devanagari on a feature phone can *say* the crop instead — Marathi, Hindi or English. The transcript is keyword-matched against the same crop dictionary a typed reply goes through, so voice is an easier way in, not a looser one. Below the confidence threshold the recording is not acted on at all: the farmer is asked to type instead, and the filing resumes exactly where it stalled. |
 
 ---
 
@@ -74,9 +75,21 @@ This architecture does not just digitize a paper process—it hardens it. By enf
 1. **Farmer Discovery**: System recognizes the phone number and loads the farmer profile.
 2. **Language Selection**: Bot communicates in the farmer's preferred language (e.g., Marathi).
 3. **Gat Selection**: Bot lists the farmer's associated Gats (1, 2, 3...) for explicit selection.
-4. **Crop & Media**: Farmer replies with the crop name and a photo.
+4. **Crop & Media**: Farmer replies with the crop name — typed, or as a voice message in Marathi/Hindi/English — plus a photo.
 5. **Backend Processing**: Standard validation pipeline is triggered transparently.
 6. **WebBridge**: Bot provides a secure one-time link to view the rich validation result on the web.
+
+---
+
+## 🗣️ 6b. Voice-Assisted Crop Entry
+Typing `सोयाबीन` on a feature-phone keypad is the step where a farmer gives up. So the crop step accepts a voice note instead.
+
+1. **Transcription** — the voice note is transcribed with a `confidence` score. `STT_PROVIDER=mock` returns fixed transcripts so the whole flow (including every failure path) is demoable with no API key; `STT_PROVIDER=gemini` transcribes for real using the `GEMINI_API_KEY` already configured for crop images — no new dependency, no new credential.
+2. **Keyword matching, not NLU** — the transcript is matched against the *same* crop dictionary a typed reply goes through. There is no language model deciding what crop was meant, so transcription can never introduce a crop the rest of the system does not recognise.
+3. **Below the threshold, nothing is filed** — under `STT_MIN_CONFIDENCE` (default `0.70`) the crop is not recorded even when the transcript happens to contain a valid crop name. The farmer is asked to type it, and the session continues from exactly where it stalled. Same safe-degrade rule as the Gemini image check: uncertainty becomes a question, never an approval.
+4. **Honest failure messages** — "we could not make out the crop name" and "we could not process your voice message, that is a problem on our side" are two different messages. A farmer told they were unclear when the outage was ours will keep re-recording a message that was fine.
+
+**Current limits, stated plainly:** the recognised crop list is **soybean and cotton** — the same two the Gemini vision layer can verify. Widening it means widening both layers together, not just the dictionary. Voice notes are transcribed and deleted; unlike the crop photo, the audio is not evidence and is not retained.
 
 ---
 
@@ -193,7 +206,7 @@ Smart-E-Peek-Pahani/
 │       │   ├── middleware/    # Auth & Error handling
 │       │   ├── models/        # Mongoose schemas (Farmer, Gat, Submission, CalamityZone)
 │       │   ├── routes/        # Express routers
-│       │   └── services/      # Validation Engine, AI, WhatsApp Flow, Notifications, Relief Matching
+│       │   └── services/      # Validation Engine, AI, WhatsApp Flow, Voice, Notifications, Relief Matching
 │       ├── tests/             # Jest automated test suites
 │       ├── scripts/           # Demo seeding scripts
 │       └── server.js
@@ -233,6 +246,7 @@ node scripts/seedCalamityZone.js   # Two sample calamity declarations (see scena
 7. **Deadline Reminder:** With the sample deadline seeded and *no* submission filed for the demo farmer, run `node scripts/runAwarenessReminders.js`. The sweep reports one farmer with nothing on file and sends the reminder — printed to the console under `NOTIFICATION_PROVIDER=mock`, or delivered to WhatsApp when pointed at the Twilio sandbox. Run it a second time: the summary reports `skipped: 1`, because `NotificationLog` will not message the same farmer twice for the same reminder window. File a submission (scenario 1) and re-run to see the farmer drop out of the candidate list entirely.
 8. **First-Contact Awareness:** Message the bot from a number that has never contacted it. Alongside the usual language menu, the number receives the one-time "what is E-Peek Pahani and why it matters" explanation. Message again — it is not repeated, and it stays un-repeated even after the 24-hour WhatsApp session expires, because the ledger lives in `NotificationLog` rather than the session.
 9. **Calamity Relief Match:** File a soybean submission on Gat 101 (scenario 1) so a `VALID` record exists, then run `node scripts/seedCalamityZone.js` — the sample heavy-rainfall declaration covers Gats 101/103/104/105 and is declared *after* your filing, which is the real sequence. Now run `node scripts/runCalamityMatching.js`: the farmer receives a WhatsApp message naming the calamity, the Gat, the crop and the filing date, and the Officer Dashboard shows a violet **Relief eligible** badge on that row plus a *Relief* stat card you can click to filter. Run it again — `matchesCreated: 0`, `notificationsSent: 0`; nobody is messaged twice. Then file on **Gat 102** and re-match: it stays out, because Gat 102 sits outside the rainfall polygon and the hailstorm declaration that *does* cover it is scoped to `cotton` only. The script prints every near-miss with a reason (`GAT_OUTSIDE_ZONE`, `CROP_NOT_AFFECTED`, `FILED_AFTER_DECLARATION`) — a farmer left off a relief list deserves an explanation an officer can read out.
+10. **Voice Crop Entry:** Reach the crop step on WhatsApp (scenario 5) — the prompt now offers typing *or* a voice message. With `STT_PROVIDER=mock`, the mock provider picks its transcript from the media filename, so each path is reproducible without an API key. Send a note named `marathi_soybean.ogg` → transcribed as `माझ्या शेतात सोयाबीन आहे` at `0.94`, recorded as `soybean`, flow advances to the location step. Now the important one: send `lowconf.ogg` → the transcript is `सोयाबीन`, a perfectly valid crop, heard at `0.31`. **Nothing is recorded.** The farmer gets "we could not make out the crop name — please type it instead" and stays at the crop step; typing `सोयाबीन` then advances the flow normally. A guess would have been *right* in this exact case, and wrong the next time — which is the point. Send `error.ogg` to see the other message: we own the failure rather than blaming the farmer. `unclear.ogg` names the two crops we can actually recognise, and `english_multiple.ogg` ("soybean and cotton") asks for one.
 
 > Officer identity is seeded locally for the demo. A production deployment would federate against the state revenue-department directory, which requires a state MoU.
 >
@@ -305,6 +319,13 @@ AWARENESS_CRON=0 8 * * *
 
 # Officer Dashboard demo seeding (optional, defaults to demo1234)
 OFFICER_DEMO_PASSWORD=demo1234
+
+# Voice crop entry: 'mock' returns fixed transcripts (no API key needed),
+# 'gemini' transcribes for real using GEMINI_API_KEY above
+STT_PROVIDER=mock
+# Below this confidence the transcript is not accepted as a crop declaration
+# and the farmer is asked to type the name instead
+STT_MIN_CONFIDENCE=0.70
 ```
 
 **Frontend (`frontend/.env`)**
@@ -318,8 +339,8 @@ VITE_API_URL=http://localhost:5000/api
 The backend relies on a rigorous automated testing pipeline using Jest and Supertest. 
 
 **Current Test Status:**
-- **31 Test Suites Passed**
-- **347 Tests Passed**
+- **35 Test Suites Passed**
+- **413 Tests Passed**
 - **0 Failures**
 
 Run tests locally:
@@ -331,8 +352,8 @@ npm test
 ---
 
 ## 🚀 18. Future Scope
-1. **Regional AI Models:** Fine-tuning Gemini models on localized, state-specific crop variants.
-2. **Voice Surveying:** Completing the Marathi speech-to-text pipeline for fully hands-free farm surveying.
+1. **Regional AI Models:** Fine-tuning Gemini models on localized, state-specific crop variants — the single change that would let both the vision layer and the voice crop list grow past soybean and cotton.
+2. **Boundary-Edge Review Routing:** Flagging submissions that fall inside a Gat but within metres of its edge for human review instead of auto-approving them, since consumer GPS error at the boundary is indistinguishable from standing in the next field.
 
 ---
 

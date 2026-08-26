@@ -15,6 +15,12 @@ module.exports = {
   awarenessCron: process.env.AWARENESS_CRON || '0 8 * * *',
   geminiApiKey: process.env.GEMINI_API_KEY,
   visionProvider: process.env.VISION_PROVIDER || 'mock',
+  // Marathi/Hindi/English voice entry for the crop step. Defaults to 'mock' so
+  // the voice flow is demoable with no API key; 'gemini' reuses GEMINI_API_KEY.
+  sttProvider: process.env.STT_PROVIDER || 'mock',
+  // Below this confidence a transcript is not treated as a crop declaration and
+  // the farmer is asked to type the name instead.
+  sttMinConfidence: process.env.STT_MIN_CONFIDENCE || '0.70',
   storageProvider: process.env.STORAGE_PROVIDER || 'cloudinary',
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,

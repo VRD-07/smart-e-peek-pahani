@@ -1,6 +1,24 @@
 const { STATES, MESSAGE_TYPES, LANGUAGES } = require('./constants');
 const { getMessage } = require('./messages');
 
+// Why a crop declaration did not land, and what to say about it. Voice and text
+// share this table because the failure is about the *words*, not the channel —
+// except for the two rows only speech can produce.
+//
+// Every row keeps the farmer at WAITING_FOR_CROP with something actionable. A
+// farmer stuck at the crop step with a generic "I didn't understand" has no way
+// to work out what to try next, and the flow has nowhere else to send them.
+const CROP_FAILURE_MESSAGES = {
+  MULTIPLE_CROPS_DETECTED: 'MULTIPLE_CROPS',
+  UNSUPPORTED_CROP: 'UNSUPPORTED_CROP',
+  // Speech only. Both point at the keyboard, but they differ on whose fault it
+  // was: VOICE_FAILED owns the failure, VOICE_UNCLEAR does not blame the farmer
+  // for words we could not resolve.
+  STT_ERROR: 'VOICE_FAILED',
+  EMPTY_TRANSCRIPT: 'VOICE_UNCLEAR',
+  LOW_CONFIDENCE: 'VOICE_UNCLEAR',
+};
+
 /**
  * Executes a state transition based on the current session and parsed message.
  * Returns the next state, the response text, and the updated session fields.
@@ -122,16 +140,13 @@ function processFlow(currentSession, parsedMessage, farmer = null) {
               declaredCrop: extraction.declaredCrop
             }
           };
-        } else if (extraction && extraction.reason === 'MULTIPLE_CROPS_DETECTED') {
+        }
+
+        const failureMessage = extraction && CROP_FAILURE_MESSAGES[extraction.reason];
+        if (failureMessage) {
           return {
             nextState: STATES.WAITING_FOR_CROP,
-            replyText: getMessage('MULTIPLE_CROPS', language),
-            updatedSessionData: {}
-          };
-        } else if (extraction && extraction.reason === 'UNSUPPORTED_CROP') {
-          return {
-            nextState: STATES.WAITING_FOR_CROP,
-            replyText: getMessage('UNSUPPORTED_CROP', language),
+            replyText: getMessage(failureMessage, language),
             updatedSessionData: {}
           };
         }

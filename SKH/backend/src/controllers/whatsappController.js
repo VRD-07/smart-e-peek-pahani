@@ -93,25 +93,35 @@ async function handleWebhook(req, res) {
         }
 
         if (parsedMessage.type === MESSAGE_TYPES.VOICE) {
-          const MockSpeechToTextProvider = require('../services/voice/mockSpeechToTextProvider');
-          const { extractCrop } = require('../services/voice/cropExtraction');
+          const { transcribeCrop } = require('../services/voice/voiceCropService');
 
-          const sttProvider = new MockSpeechToTextProvider();
-          const transcriptResult = await sttProvider.transcribe(media);
+          try {
+            // The service decides whether the transcript is worth acting on and
+            // returns a reason when it is not. The type stays VOICE so the crop
+            // step can answer with the right fallback instead of the generic
+            // "I did not understand" a stuck farmer cannot act on.
+            const voiceResult = await transcribeCrop(media);
 
-          if (transcriptResult.error) {
-            parsedMessage.type = MESSAGE_TYPES.UNKNOWN;
-            parsedMessage.errorReason = 'STT_ERROR';
-          } else if (!transcriptResult.text) {
-            parsedMessage.type = MESSAGE_TYPES.UNKNOWN;
-            parsedMessage.errorReason = 'EMPTY_TRANSCRIPT';
-          } else {
-            const extraction = extractCrop(transcriptResult.text);
             parsedMessage.data = {
               media,
-              transcript: transcriptResult.text,
-              extraction
+              transcript: voiceResult.transcript,
+              confidence: voiceResult.confidence,
+              extraction: {
+                declaredCrop: voiceResult.declaredCrop,
+                reason: voiceResult.reason,
+                ...(voiceResult.candidates ? { candidates: voiceResult.candidates } : {}),
+              },
             };
+          } finally {
+            // Voice notes are transcribed and discarded — unlike the crop photo,
+            // the audio is not evidence and is not kept. The image path already
+            // cleaned up after itself; this one did not, so every voice note left
+            // a file behind in the OS temp directory.
+            const fs = require('fs');
+            const localPath = media.url.replace('file://', '');
+            fs.unlink(localPath, (err) => {
+              if (err) console.error('Failed to cleanup temp audio file:', err);
+            });
           }
         }
       } catch (err) {
