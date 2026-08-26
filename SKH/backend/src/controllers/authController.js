@@ -1,5 +1,6 @@
 const { successResponse, errorResponse } = require('../utils/response');
 const Farmer = require('../models/Farmer');
+const Officer = require('../models/Officer');
 const OTP = require('../models/OTP');
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
@@ -72,7 +73,44 @@ const verifyOtp = async (req, res) => {
   return successResponse(res, 'Authentication successful', { token });
 };
 
+/**
+ * Officer login for the global dashboard.
+ * Officers authenticate with an employee ID + password rather than the farmer
+ * OTP flow, but receive the same JWT shape so `protect` is reused unchanged.
+ */
+const officerLogin = async (req, res) => {
+  const { employeeId, password } = req.body;
+
+  if (!employeeId || !password) {
+    return errorResponse(res, 'Employee ID and password are required', 'VALIDATION_ERROR', 400);
+  }
+
+  const officer = await Officer.findOne({ employeeId });
+
+  // Same message for unknown officer and wrong password so the endpoint does
+  // not confirm which employee IDs exist.
+  if (!officer || !(await officer.verifyPassword(password))) {
+    return errorResponse(res, 'Invalid credentials', 'INVALID_CREDENTIALS', 401);
+  }
+
+  const token = jwt.sign(
+    { officerId: officer._id, role: officer.role },
+    env.jwtSecret,
+    { expiresIn: '12h' }
+  );
+
+  return successResponse(res, 'Authentication successful', {
+    token,
+    officer: {
+      name: officer.name,
+      employeeId: officer.employeeId,
+      jurisdiction: officer.jurisdiction,
+    },
+  });
+};
+
 module.exports = {
   requestOtp,
   verifyOtp,
+  officerLogin,
 };

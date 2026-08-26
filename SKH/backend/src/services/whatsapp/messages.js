@@ -14,7 +14,12 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'तुमचा WhatsApp नंबर नोंदणीकृत नाही. कृपया प्रथम शेतकरी नोंदणी पूर्ण करा.',
     MISSING_GAT: 'तुमचे प्रोफाईल कोणत्याही गटाशी जोडलेले नाही. कृपया प्रोफाईल अपडेट करा.',
     ASK_GAT_SELECTION: 'कृपया तुम्ही कोणत्या गटाची नोंदणी करत आहात ते निवडा:',
-    INVALID_GAT_SELECTION: 'चुकीची निवड. कृपया योग्य क्रमांक पाठवा:'
+    INVALID_GAT_SELECTION: 'चुकीची निवड. कृपया योग्य क्रमांक पाठवा:',
+    SEASON_KHARIF: 'खरीप',
+    SEASON_RABI: 'रब्बी',
+    SEASON_SUMMER: 'उन्हाळी',
+    AWARENESS_INTRO: 'ई-पीक पाहणी म्हणजे काय?\n\nतुमच्या शेतात कोणते पीक आहे याची शासकीय नोंद. ही नोंद शेतकऱ्याने स्वतः करायची असते.\n\nही नोंद का महत्त्वाची आहे?\nअतिवृष्टी, दुष्काळ किंवा गारपीट यासाठी शासन नुकसान भरपाई जाहीर करते. पण भरपाई मिळण्यासाठी त्या हंगामात तुमच्या पिकाची नोंद झालेली असणे आवश्यक असते. नोंद नसेल, तर खरोखर नुकसान होऊनही मदत मिळत नाही.\n\nनोंद करण्यासाठी कधीही \'Hi\' पाठवा. फक्त दोन मिनिटे लागतात.',
+    DEADLINE_REMINDER: 'स्मरणपत्र: {{season}} {{year}} ई-पीक पाहणीची अंतिम तारीख {{date}} आहे — {{days}} दिवस शिल्लक.\n\nया हंगामात तुमच्या पिकाची नोंद आमच्याकडे दिसत नाही. नोंद नसेल तर पिकाचे नुकसान झाले तरी नुकसान भरपाईसाठी तुम्ही पात्र ठरणार नाही.\n\nआता नोंद करण्यासाठी \'Hi\' पाठवा. फक्त दोन मिनिटे लागतात.'
   },
   [LANGUAGES.HI]: {
     WELCOME: 'नमस्ते! ई-पीक पाहणी में आपका स्वागत है। कृपया अपनी भाषा चुनें:\n1. मराठी\n2. हिंदी\n3. English',
@@ -29,7 +34,12 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'आपका WhatsApp नंबर पंजीकृत नहीं है। कृपया पहले किसान पंजीकरण पूरा करें।',
     MISSING_GAT: 'आपका प्रोफ़ाइल किसी गट से नहीं जुड़ा है। कृपया प्रोफ़ाइल अपडेट करें।',
     ASK_GAT_SELECTION: 'कृपया चुनें कि आप किस गट की रिपोर्ट कर रहे हैं:',
-    INVALID_GAT_SELECTION: 'अमान्य चयन। कृपया सही संख्या भेजें:'
+    INVALID_GAT_SELECTION: 'अमान्य चयन। कृपया सही संख्या भेजें:',
+    SEASON_KHARIF: 'खरीफ',
+    SEASON_RABI: 'रबी',
+    SEASON_SUMMER: 'ज़ायद',
+    AWARENESS_INTRO: 'ई-पीक पाहणी क्या है?\n\nआपके खेत में कौन सी फसल खड़ी है, इसका सरकारी रिकॉर्ड। यह रिकॉर्ड किसान को खुद दर्ज करना होता है।\n\nयह क्यों ज़रूरी है?\nअतिवृष्टि, सूखा या ओलावृष्टि पर सरकार मुआवज़ा घोषित करती है। लेकिन मुआवज़े के लिए उस मौसम में आपकी फसल का रिकॉर्ड होना ज़रूरी है। रिकॉर्ड न हो तो नुकसान होने पर भी मदद नहीं मिलती।\n\nदर्ज करने के लिए कभी भी \'Hi\' भेजें। सिर्फ दो मिनट लगते हैं।',
+    DEADLINE_REMINDER: 'स्मरण: {{season}} {{year}} ई-पीक पाहणी की अंतिम तारीख {{date}} है — {{days}} दिन बाकी।\n\nइस मौसम में आपकी फसल का रिकॉर्ड हमारे पास नहीं है। रिकॉर्ड न होने पर फसल का नुकसान होने पर भी आप मुआवज़े के पात्र नहीं होंगे।\n\nअभी दर्ज करने के लिए \'Hi\' भेजें। सिर्फ दो मिनट लगते हैं।'
   },
   [LANGUAGES.EN]: {
     WELCOME: 'Namaskar! 🙏\n\nWelcome to Smart E-Peek Pahani.\n\nPlease select your language:\n1. मराठी\n2. हिंदी\n3. English',
@@ -44,17 +54,35 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'Your WhatsApp number is not registered. Please complete farmer registration before submitting your crop details.',
     MISSING_GAT: 'Your farmer profile is not linked to a Gat. Please complete your profile registration.',
     ASK_GAT_SELECTION: 'Please select which field you want to report:',
-    INVALID_GAT_SELECTION: 'Invalid selection. Please reply with a valid number:'
+    INVALID_GAT_SELECTION: 'Invalid selection. Please reply with a valid number:',
+    SEASON_KHARIF: 'Kharif',
+    SEASON_RABI: 'Rabi',
+    SEASON_SUMMER: 'Summer',
+    AWARENESS_INTRO: 'What is E-Peek Pahani?\n\nIt is the government record of which crop is standing in your field. The record has to be filed by you, the farmer.\n\nWhy it matters:\nWhen heavy rain, drought or hailstorm is declared a calamity, the state announces compensation — but relief is assessed against the crop record filed for that season. With no record, help does not reach you even when the loss is real.\n\nSend \'Hi\' whenever you are ready to file. It takes about two minutes.',
+    DEADLINE_REMINDER: 'Reminder: {{season}} {{year}} E-Peek Pahani closes on {{date}} — {{days}} day(s) left.\n\nWe do not see a crop record on file for you this season. Without one you will not be eligible for calamity relief for this season, even if your crop is damaged.\n\nSend \'Hi\' to file now. It takes about two minutes.'
   }
 };
 
 /**
+ * Replaces {{token}} placeholders with the supplied values.
+ * Missing tokens are left untouched so a copy change never yields 'undefined'.
+ */
+function interpolate(template, vars) {
+  if (!vars) return template;
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => (
+    vars[key] === undefined || vars[key] === null ? match : String(vars[key])
+  ));
+}
+
+/**
  * Gets a translated message for a specific key and language.
  * Defaults to English if language is not set or not found.
+ * Pass `vars` to fill {{token}} placeholders (used by awareness reminders).
  */
-function getMessage(key, language = LANGUAGES.EN) {
+function getMessage(key, language = LANGUAGES.EN, vars = null) {
   const langDict = DICTIONARY[language] || DICTIONARY[LANGUAGES.EN];
-  return langDict[key] || DICTIONARY[LANGUAGES.EN][key] || 'Message not found.';
+  const template = langDict[key] || DICTIONARY[LANGUAGES.EN][key] || 'Message not found.';
+  return interpolate(template, vars);
 }
 
 module.exports = {

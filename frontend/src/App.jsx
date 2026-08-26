@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Header, OnlineStatus } from './components/common';
-import { Home, FarmerOnboarding, SubmissionStatus, OfflineQueue, AdminDashboard, WebBridge, Login } from './pages';
+import { Home, FarmerOnboarding, SubmissionStatus, OfflineQueue, AdminDashboard, WebBridge, Login, OfficerDashboard, OfficerLogin } from './pages';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('smart_e_peek_token');
@@ -9,6 +9,18 @@ const ProtectedRoute = ({ children }) => {
 
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+
+const OfficerRoute = ({ children }) => {
+  const token = localStorage.getItem('smart_e_peek_token');
+  const officer = localStorage.getItem('smart_e_peek_officer');
+  const location = useLocation();
+
+  if (!token || !officer) {
+    return <Navigate to="/officer/login" state={{ from: location }} replace />;
   }
 
   return children;
@@ -33,6 +45,12 @@ function App() {
             <Route path="/submit" element={<WebBridge />} />
             <Route path="/offline" element={<OfflineQueue />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/officer/login" element={<OfficerLogin />} />
+            <Route path="/officer" element={
+              <OfficerRoute>
+                <OfficerDashboard />
+              </OfficerRoute>
+            } />
             <Route path="*" element={<div className="p-8 text-center text-gray-500">Page not found</div>} />
           </Routes>
         </main>

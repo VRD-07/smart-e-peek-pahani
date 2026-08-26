@@ -21,4 +21,15 @@ const protect = (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+/**
+ * Restricts a route to the given JWT roles.
+ * Must be mounted after `protect`, which populates req.user from the token.
+ */
+const requireRole = (...allowedRoles) => (req, res, next) => {
+  if (!req.user || !allowedRoles.includes(req.user.role)) {
+    return errorResponse(res, 'Not authorized for this resource', 'FORBIDDEN', 403);
+  }
+  next();
+};
+
+module.exports = { protect, requireRole };

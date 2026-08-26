@@ -74,6 +74,11 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  // Daily deadline-reminder sweep. Skipped under test so Jest does not hold an
+  // open timer; run it manually with `node scripts/runAwarenessReminders.js`.
+  const { startAwarenessJob } = require('./src/jobs/awarenessJob');
+  startAwarenessJob();
 }
 
 module.exports = app;

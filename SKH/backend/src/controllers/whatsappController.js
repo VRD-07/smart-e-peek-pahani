@@ -34,6 +34,23 @@ async function handleWebhook(req, res) {
     const Farmer = require('../models/Farmer');
     const farmer = await Farmer.findOne({ phoneNumber: sender }).populate('associatedGats');
 
+    // 1.6 One-time awareness intro for a number we have never heard from.
+    // Deliberately not gated on the farmer existing: the people who lose out on
+    // relief are the ones with no record at all, so an unregistered number gets
+    // the explanation too. NotificationLog de-duplicates for the life of the
+    // number, which is why this does not live on the 24h WhatsApp session.
+    // Language: the farmer's own preference when we know it, otherwise the
+    // session's, otherwise Marathi — on a genuine first message the language
+    // menu has not been answered yet.
+    try {
+      const { sendAwarenessIntro } = require('../services/notifications/awarenessService');
+      const introLanguage = farmer?.preferredLanguage || currentSession.language || 'mr';
+      await sendAwarenessIntro(sender, introLanguage, farmer?._id || null);
+    } catch (error) {
+      // Awareness is additive; never let it break the survey flow.
+      console.error('[WhatsApp Controller] Awareness intro failed:', error.message);
+    }
+
     // 2. Parse Incoming Payload
     let parsedMessage = parseMessage(payload);
 

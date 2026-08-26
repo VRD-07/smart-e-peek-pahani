@@ -32,8 +32,14 @@ api.interceptors.response.use(
         // Do not redirect if the request was to the bridge token verification endpoint
         if (!error.config.url.includes('/bridge/verify')) {
           localStorage.removeItem('smart_e_peek_token');
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+
+          // Officers sign in through a separate route from farmers
+          const loginPath = window.location.pathname.startsWith('/officer')
+            ? '/officer/login'
+            : '/login';
+
+          if (window.location.pathname !== loginPath) {
+            window.location.href = loginPath;
           }
         }
       }

@@ -53,6 +53,8 @@ This architecture does not just digitize a paper process—it hardens it. By enf
 | **WhatsApp Workflow** | Full survey flow directly inside WhatsApp with multi-language support. |
 | **WebBridge** | Seamlessly connects a WhatsApp session to the rich web UI for complex status viewing. |
 | **Reactive Dashboard** | Frontend UI instantly updates without refreshing via Dexie `useLiveQuery`. |
+| **Officer Dashboard** | Role-protected `GET /api/submissions` endpoint plus a global review console: every submission across all farmers and Gats, filterable by outcome / Gat / district / date range, viewable as a sortable table or a Leaflet map with outcome-coloured pins. |
+| **Farmer Awareness Module** | Scheduled WhatsApp sweep that reminds farmers with nothing on file before a season's filing deadline closes, plus a one-time "what E-Peek Pahani is and why it matters" message on first contact from a new number. Every send is de-duplicated and logged, and messages go out in the farmer's own language. |
 
 ---
 
@@ -202,7 +204,15 @@ Smart-E-Peek-Pahani/
 ---
 
 ## 🧪 14. Demo Scenarios & Dataset
-The database includes a test farmer equipped with **five independent demo Gats**. 
+The database includes a test farmer equipped with **five independent demo Gats**, plus a demo revenue officer for the Officer Dashboard.
+
+**Seed the demo dataset:**
+```bash
+cd SKH/backend
+node scripts/seedDemoGats.js       # Demo farmer 1234567890 + Gats 101-105
+node scripts/seedDemoOfficer.js    # Demo officer OFFICER001 / demo1234
+node scripts/seedSchemeDeadline.js # Sample Kharif filing deadline, 5 days out
+```
 
 **Demo Coordinates:**
 - **Gat 101:** `19.901255644, 74.493974593`
@@ -217,6 +227,13 @@ The database includes a test farmer equipped with **five independent demo Gats**
 3. **Crop Mismatch:** Select Gat 101 + GPS 101 + Upload random object → `INVALID` (AI rejection).
 4. **Offline Mode:** Turn off network → Submit → View in Offline Queue → Turn network on → Watch it auto-sync.
 5. **WhatsApp Multi-Gat:** Message the bot from the demo number → See 5 Gats offered → Select Gat 2 → Complete flow.
+6. **Officer Review:** Run scenarios 1 and 3 so the database holds mixed outcomes → sign in at `/officer/login` as `OFFICER001` / `demo1234` → the dashboard lists submissions from *every* farmer and Gat, not just one account. Click the **Review** stat card to filter to flagged cases only, then switch to **Map** to see each submission plotted on its Gat polygon in its outcome colour (green `VALID` / amber `REVIEW` / red `INVALID`). Filter by `district=Nashik` or a date range to narrow further.
+7. **Deadline Reminder:** With the sample deadline seeded and *no* submission filed for the demo farmer, run `node scripts/runAwarenessReminders.js`. The sweep reports one farmer with nothing on file and sends the reminder — printed to the console under `NOTIFICATION_PROVIDER=mock`, or delivered to WhatsApp when pointed at the Twilio sandbox. Run it a second time: the summary reports `skipped: 1`, because `NotificationLog` will not message the same farmer twice for the same reminder window. File a submission (scenario 1) and re-run to see the farmer drop out of the candidate list entirely.
+8. **First-Contact Awareness:** Message the bot from a number that has never contacted it. Alongside the usual language menu, the number receives the one-time "what is E-Peek Pahani and why it matters" explanation. Message again — it is not repeated, and it stays un-repeated even after the 24-hour WhatsApp session expires, because the ledger lives in `NotificationLog` rather than the session.
+
+> Officer identity is seeded locally for the demo. A production deployment would federate against the state revenue-department directory, which requires a state MoU.
+>
+> Filing deadlines are seeded as clearly-labelled sample data. Real season windows would come from the Agriculture Department under the same MoU. Outbound WhatsApp defaults to a mock provider that prints instead of sending; the Twilio *sandbox* works with credentials, while a production WhatsApp Business sender needs Meta business verification and approved templates.
 
 ---
 
@@ -275,6 +292,14 @@ CLOUDINARY_API_SECRET=your_cloudinary_secret
 TWILIO_ACCOUNT_SID=your_sid
 TWILIO_AUTH_TOKEN=your_token
 TWILIO_WHATSAPP_NUMBER=whatsapp:+1234567890
+
+# Outbound notifications: 'mock' prints to the console, 'twilio' sends for real
+NOTIFICATION_PROVIDER=mock
+# Daily awareness sweep schedule (5-field cron), defaults to 08:00
+AWARENESS_CRON=0 8 * * *
+
+# Officer Dashboard demo seeding (optional, defaults to demo1234)
+OFFICER_DEMO_PASSWORD=demo1234
 ```
 
 **Frontend (`frontend/.env`)**
@@ -288,8 +313,8 @@ VITE_API_URL=http://localhost:5000/api
 The backend relies on a rigorous automated testing pipeline using Jest and Supertest. 
 
 **Current Test Status:**
-- **24 Test Suites Passed**
-- **194 Tests Passed**
+- **29 Test Suites Passed**
+- **293 Tests Passed**
 - **0 Failures**
 
 Run tests locally:
@@ -301,9 +326,8 @@ npm test
 ---
 
 ## 🚀 18. Future Scope
-1. **Admin Dashboard Global Integration:** Current Admin UI is a local PWA offline-queue viewer. Next step is connecting it to a global `GET /api/submissions` MongoDB endpoint for true centralized auditing.
-2. **Regional AI Models:** Fine-tuning Gemini models on localized, state-specific crop variants.
-3. **Voice Surveying:** Completing the Marathi speech-to-text pipeline for fully hands-free farm surveying.
+1. **Regional AI Models:** Fine-tuning Gemini models on localized, state-specific crop variants.
+2. **Voice Surveying:** Completing the Marathi speech-to-text pipeline for fully hands-free farm surveying.
 
 ---
 
