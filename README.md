@@ -34,7 +34,7 @@ Traditional and field-level crop surveying in agriculture faces immense logistic
 2. **Gemini Vision AI** for automated crop image analysis
 3. **Offline-First PWA** for surveys in zero-connectivity areas
 4. **WhatsApp Bot** for an accessible, low-friction farmer interface
-5. **Secure Backend Validation** to guarantee data integrity
+5. **Secure Backend Validation** as the authoritative check on submitted data
 
 ## 🎯 3. Why This Approach?
 This architecture does not just digitize a paper process—it hardens it. By enforcing an **authoritative backend verification** (Turf.js) over UX pre-checks, ensuring **idempotent syncs**, and providing **AI-assisted reviews** instead of blind approvals, we've created a system that is robust against spoofing, network failures, and bad data.
@@ -55,6 +55,7 @@ This architecture does not just digitize a paper process—it hardens it. By enf
 | **Reactive Dashboard** | Frontend UI instantly updates without refreshing via Dexie `useLiveQuery`. |
 | **Officer Dashboard** | Role-protected `GET /api/submissions` endpoint plus a global review console: every submission across all farmers and Gats, filterable by outcome / Gat / district / date range, viewable as a sortable table or a Leaflet map with outcome-coloured pins. |
 | **Farmer Awareness Module** | Scheduled WhatsApp sweep that reminds farmers with nothing on file before a season's filing deadline closes, plus a one-time "what E-Peek Pahani is and why it matters" message on first contact from a new number. Every send is de-duplicated and logged, and messages go out in the farmer's own language. |
+| **Calamity-Relief Matching** | When a calamity is declared, the declared polygon is intersected against every Gat boundary using the same Turf.js geometry as the validation engine. Farmers whose **verified** filing sits inside the zone are told on WhatsApp that their record may qualify them for relief, and the officer dashboard gains a *Relief eligible* badge and filter. Crop-scoped declarations only sweep in the crops they name, and a filing created *after* the declaration is never matched. |
 
 ---
 
@@ -89,7 +90,7 @@ Our system uses a dual-layer location verification strategy to prevent spoofing:
    
 2. **Authoritative Backend Validation (Security)**
    - The frontend is **never** trusted as the final security boundary.
-   - The backend runs `Turf.js` to mathematically guarantee the received coordinates fall within the farmer's authorized Gat polygon.
+   - The backend runs `Turf.js` to check whether the received coordinates fall within the farmer's authorized Gat polygon — a deterministic geometric test, not a trust score. It cannot detect a spoofed GPS chip, which is why borderline and AI-uncertain cases are routed to human review rather than auto-approved.
 
 ## 🤖 8. Gemini Vision AI
 We utilize Google's **Gemini Vision AI** as a powerful crop verification layer.
@@ -190,9 +191,9 @@ Smart-E-Peek-Pahani/
 │       ├── src/
 │       │   ├── controllers/   # Route handlers
 │       │   ├── middleware/    # Auth & Error handling
-│       │   ├── models/        # Mongoose schemas (Farmer, Gat, Submission)
+│       │   ├── models/        # Mongoose schemas (Farmer, Gat, Submission, CalamityZone)
 │       │   ├── routes/        # Express routers
-│       │   └── services/      # Validation Engine, AI, WhatsApp Flow
+│       │   └── services/      # Validation Engine, AI, WhatsApp Flow, Notifications, Relief Matching
 │       ├── tests/             # Jest automated test suites
 │       ├── scripts/           # Demo seeding scripts
 │       └── server.js
@@ -212,6 +213,7 @@ cd SKH/backend
 node scripts/seedDemoGats.js       # Demo farmer 1234567890 + Gats 101-105
 node scripts/seedDemoOfficer.js    # Demo officer OFFICER001 / demo1234
 node scripts/seedSchemeDeadline.js # Sample Kharif filing deadline, 5 days out
+node scripts/seedCalamityZone.js   # Two sample calamity declarations (see scenario 9)
 ```
 
 **Demo Coordinates:**
@@ -230,10 +232,13 @@ node scripts/seedSchemeDeadline.js # Sample Kharif filing deadline, 5 days out
 6. **Officer Review:** Run scenarios 1 and 3 so the database holds mixed outcomes → sign in at `/officer/login` as `OFFICER001` / `demo1234` → the dashboard lists submissions from *every* farmer and Gat, not just one account. Click the **Review** stat card to filter to flagged cases only, then switch to **Map** to see each submission plotted on its Gat polygon in its outcome colour (green `VALID` / amber `REVIEW` / red `INVALID`). Filter by `district=Nashik` or a date range to narrow further.
 7. **Deadline Reminder:** With the sample deadline seeded and *no* submission filed for the demo farmer, run `node scripts/runAwarenessReminders.js`. The sweep reports one farmer with nothing on file and sends the reminder — printed to the console under `NOTIFICATION_PROVIDER=mock`, or delivered to WhatsApp when pointed at the Twilio sandbox. Run it a second time: the summary reports `skipped: 1`, because `NotificationLog` will not message the same farmer twice for the same reminder window. File a submission (scenario 1) and re-run to see the farmer drop out of the candidate list entirely.
 8. **First-Contact Awareness:** Message the bot from a number that has never contacted it. Alongside the usual language menu, the number receives the one-time "what is E-Peek Pahani and why it matters" explanation. Message again — it is not repeated, and it stays un-repeated even after the 24-hour WhatsApp session expires, because the ledger lives in `NotificationLog` rather than the session.
+9. **Calamity Relief Match:** File a soybean submission on Gat 101 (scenario 1) so a `VALID` record exists, then run `node scripts/seedCalamityZone.js` — the sample heavy-rainfall declaration covers Gats 101/103/104/105 and is declared *after* your filing, which is the real sequence. Now run `node scripts/runCalamityMatching.js`: the farmer receives a WhatsApp message naming the calamity, the Gat, the crop and the filing date, and the Officer Dashboard shows a violet **Relief eligible** badge on that row plus a *Relief* stat card you can click to filter. Run it again — `matchesCreated: 0`, `notificationsSent: 0`; nobody is messaged twice. Then file on **Gat 102** and re-match: it stays out, because Gat 102 sits outside the rainfall polygon and the hailstorm declaration that *does* cover it is scoped to `cotton` only. The script prints every near-miss with a reason (`GAT_OUTSIDE_ZONE`, `CROP_NOT_AFFECTED`, `FILED_AFTER_DECLARATION`) — a farmer left off a relief list deserves an explanation an officer can read out.
 
 > Officer identity is seeded locally for the demo. A production deployment would federate against the state revenue-department directory, which requires a state MoU.
 >
 > Filing deadlines are seeded as clearly-labelled sample data. Real season windows would come from the Agriculture Department under the same MoU. Outbound WhatsApp defaults to a mock provider that prints instead of sending; the Twilio *sandbox* works with credentials, while a production WhatsApp Business sender needs Meta business verification and approved templates.
+>
+> Calamity zones are seeded the same way — clearly-labelled samples, not official declarations. In production they would arrive from the state's disaster-management declaration feed, again under a state MoU. A match means the filing should be **assessed** for relief; it is not an approved payout, and the decision stays with the revenue office.
 
 ---
 
@@ -313,8 +318,8 @@ VITE_API_URL=http://localhost:5000/api
 The backend relies on a rigorous automated testing pipeline using Jest and Supertest. 
 
 **Current Test Status:**
-- **29 Test Suites Passed**
-- **293 Tests Passed**
+- **31 Test Suites Passed**
+- **347 Tests Passed**
 - **0 Failures**
 
 Run tests locally:

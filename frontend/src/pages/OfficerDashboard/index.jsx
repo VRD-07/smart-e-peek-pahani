@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { FilterBar } from './FilterBar';
 import { SubmissionsTable } from './SubmissionsTable';
 import { SubmissionsMap } from './SubmissionsMap';
-import { clearOfficerSession, getStoredOfficer, statusMeta } from './statusMeta';
+import { clearOfficerSession, getStoredOfficer, RELIEF_META, statusMeta } from './statusMeta';
 
 const EMPTY_FILTERS = {
   status: '',
@@ -12,6 +12,7 @@ const EMPTY_FILTERS = {
   district: '',
   from: '',
   to: '',
+  reliefEligible: '',
 };
 
 const STAT_CARDS = ['VALID', 'REVIEW', 'INVALID', 'PENDING_VALIDATION'];
@@ -21,6 +22,7 @@ export const OfficerDashboard = () => {
 
   const [submissions, setSubmissions] = useState([]);
   const [statusCounts, setStatusCounts] = useState({});
+  const [reliefEligibleCount, setReliefEligibleCount] = useState(0);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [gats, setGats] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -46,6 +48,7 @@ export const OfficerDashboard = () => {
 
       setSubmissions(data.submissions);
       setStatusCounts(data.statusCounts || {});
+      setReliefEligibleCount(data.reliefEligibleCount || 0);
       setPagination(data.pagination);
     } catch (err) {
       if (err.response?.status === 403) {
@@ -127,7 +130,7 @@ export const OfficerDashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
           <div className="text-gray-500 text-sm font-medium mb-1">Total</div>
           <div className="text-2xl font-bold text-gray-900">{pagination.total}</div>
@@ -153,6 +156,24 @@ export const OfficerDashboard = () => {
             </button>
           );
         })}
+
+        {/* Relief eligibility is orthogonal to the outcome buckets, so it gets its
+            own toggle rather than joining the status cards. */}
+        <button
+          onClick={() => handleFilterChange('reliefEligible', filters.reliefEligible === 'true' ? '' : 'true')}
+          className={`p-4 rounded-xl border shadow-sm text-left transition-colors ${
+            filters.reliefEligible === 'true'
+              ? 'border-gray-300 bg-gray-50 ring-2 ring-primary-500/30'
+              : 'border-gray-100 bg-white hover:bg-gray-50'
+          }`}
+          title="Verified filings whose field falls inside a declared calamity zone"
+        >
+          <div className="text-sm font-medium mb-1 flex items-center gap-1.5 text-gray-500">
+            <span className={`w-2 h-2 rounded-full ${RELIEF_META.dot}`} />
+            Relief
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{reliefEligibleCount}</div>
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
@@ -244,7 +265,9 @@ export const OfficerDashboard = () => {
         Outcomes are produced by the shared validation engine used by both the web app and the
         WhatsApp bot. Submissions marked <strong>Review</strong> need a human decision — no photo
         and GPS check can rule out every false claim, so flagged cases are surfaced rather than
-        silently approved.
+        silently approved. <strong>Relief eligible</strong> means a verified filing's field falls
+        inside a declared calamity zone and should be assessed for relief — it is not an approved
+        payout, and the decision stays with the revenue office.
       </p>
     </div>
   );

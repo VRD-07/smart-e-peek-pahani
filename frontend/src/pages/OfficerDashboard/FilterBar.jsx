@@ -8,13 +8,19 @@ const STATUS_OPTIONS = [
   { value: 'PENDING_VALIDATION', label: 'Validating' },
 ];
 
+const RELIEF_OPTIONS = [
+  { value: '', label: 'Relief: any' },
+  { value: 'true', label: 'In a calamity zone' },
+  { value: 'false', label: 'Not in a calamity zone' },
+];
+
 const inputClass =
   'text-sm border border-gray-200 rounded-lg py-1.5 px-3 bg-white focus:ring-primary-500 focus:border-primary-500';
 
 export const FilterBar = ({ filters, onChange, onReset, gats }) => {
   const set = (key) => (e) => onChange(key, e.target.value);
 
-  const hasActiveFilter = ['status', 'gatId', 'district', 'from', 'to']
+  const hasActiveFilter = ['status', 'gatId', 'district', 'from', 'to', 'reliefEligible']
     .some((key) => filters[key]);
 
   return (
@@ -47,6 +53,17 @@ export const FilterBar = ({ filters, onChange, onReset, gats }) => {
         onChange={set('district')}
         aria-label="District"
       />
+
+      <select
+        className={inputClass}
+        value={filters.reliefEligible}
+        onChange={set('reliefEligible')}
+        aria-label="Calamity relief eligibility"
+      >
+        {RELIEF_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
 
       <label className="text-sm text-gray-500 flex items-center gap-2">
         From

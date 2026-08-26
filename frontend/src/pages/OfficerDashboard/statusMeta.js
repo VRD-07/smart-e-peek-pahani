@@ -17,6 +17,16 @@ export const FALLBACK_STATUS_META = {
 
 export const statusMeta = (status) => STATUS_META[status] || FALLBACK_STATUS_META;
 
+// Calamity-relief flag. Deliberately a separate dimension from the validation
+// outcome above: a submission is Valid *and* may be relief-eligible, so this
+// renders as its own badge rather than a sixth outcome colour.
+export const RELIEF_META = {
+  label: 'Relief eligible',
+  color: '#7c3aed',
+  dot: 'bg-violet-500',
+  chip: 'bg-violet-100 text-violet-700',
+};
+
 export const OFFICER_STORAGE_KEY = 'smart_e_peek_officer';
 
 export const getStoredOfficer = () => {

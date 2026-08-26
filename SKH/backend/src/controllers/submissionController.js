@@ -4,7 +4,9 @@ const Submission = require('../models/Submission');
 const ValidationResult = require('../models/ValidationResult');
 const Farmer = require('../models/Farmer');
 const Gat = require('../models/Gat');
+const CalamityMatch = require('../models/CalamityMatch');
 const { validateSubmission } = require('../services/validation/validationService');
+const { getMatchesForSubmissions } = require('../services/relief/calamityMatchingService');
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -79,11 +81,11 @@ const getSubmission = async (req, res) => {
  *
  * Officer-only: returns submissions across every farmer and Gat, unlike the
  * farmer-facing routes which are scoped to the authenticated farmer.
- * Supports pagination, status / Gat / administrative-area / date-range filters
- * and whitelisted sorting.
+ * Supports pagination, status / Gat / administrative-area / date-range filters,
+ * a calamity-relief-eligibility filter and whitelisted sorting.
  */
 const listSubmissions = async (req, res) => {
-  const { status, gatId, district, village, from, to, sortBy, sortOrder } = req.query;
+  const { status, gatId, district, village, from, to, sortBy, sortOrder, reliefEligible } = req.query;
 
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const requestedLimit = parseInt(req.query.limit, 10) || DEFAULT_PAGE_SIZE;
@@ -155,12 +157,26 @@ const listSubmissions = async (req, res) => {
   const sortField = SORTABLE_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
   const sortDirection = sortOrder === 'asc' ? 1 : -1;
 
+  // Relief-eligibility filter. Resolves through CalamityMatch using the same
+  // pre-query-then-narrow shape as the district/village filters above.
+  // Captured before the filter is applied so the relief count below can ignore
+  // it, the way statusCounts ignores the status filter.
+  const reliefQuery = { ...query };
+  const matchedIds = await CalamityMatch.distinct('submissionId');
+
+  if (reliefEligible !== undefined) {
+    if (reliefEligible !== 'true' && reliefEligible !== 'false') {
+      return errorResponse(res, 'reliefEligible must be true or false', 'VALIDATION_ERROR', 400);
+    }
+    query._id = reliefEligible === 'true' ? { $in: matchedIds } : { $nin: matchedIds };
+  }
+
   // Status counts ignore the status filter itself so the dashboard tabs can show
   // totals for the rest of the active filters.
   const countsQuery = { ...query };
   delete countsQuery.status;
 
-  const [submissions, total, statusGroups] = await Promise.all([
+  const [submissions, total, statusGroups, reliefEligibleCount] = await Promise.all([
     Submission.find(query)
       .populate('farmerId', 'name phoneNumber preferredLanguage')
       .populate('gatId', 'gatNumber village district center boundary')
@@ -174,6 +190,7 @@ const listSubmissions = async (req, res) => {
       { $match: countsQuery },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
+    Submission.countDocuments({ ...reliefQuery, _id: { $in: matchedIds } }),
   ]);
 
   const statusCounts = statusGroups.reduce((acc, group) => {
@@ -181,9 +198,19 @@ const listSubmissions = async (req, res) => {
     return acc;
   }, {});
 
+  // Attach relief matches so the dashboard can badge rows without one request
+  // per row. A match means the filing is eligible to be *assessed* for relief —
+  // the payout decision stays with the revenue officer.
+  const matchesBySubmission = await getMatchesForSubmissions(submissions.map((s) => s._id));
+  const enriched = submissions.map((submission) => ({
+    ...submission.toObject(),
+    calamityMatches: matchesBySubmission[submission._id.toString()] || [],
+  }));
+
   return successResponse(res, 'Submissions fetched successfully', {
-    submissions,
+    submissions: enriched,
     statusCounts,
+    reliefEligibleCount,
     pagination: {
       page,
       limit,

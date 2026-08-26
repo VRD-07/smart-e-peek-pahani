@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, RefreshCw } from 'lucide-react';
-import { statusMeta } from './statusMeta';
+import { RELIEF_META, statusMeta } from './statusMeta';
 
 const COLUMNS = [
   { key: 'farmer', label: 'Farmer', sortable: false },
@@ -61,6 +61,7 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
           {submissions.map((sub) => {
             const meta = statusMeta(sub.status);
             const reasons = sub.validationResultId?.reasons || [];
+            const matches = sub.calamityMatches || [];
 
             return (
               <tr key={sub._id} className="hover:bg-gray-50 transition-colors">
@@ -83,10 +84,25 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.chip}`}>
-                    <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                    {meta.label}
-                  </span>
+                  <div className="flex flex-col items-start gap-1.5">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.chip}`}>
+                      <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                      {meta.label}
+                    </span>
+
+                    {/* Relief eligibility is a second, independent dimension — a
+                        filing can be Valid and also sit inside a declared zone. */}
+                    {matches.length > 0 && (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${RELIEF_META.chip}`}
+                        title={matches.map((m) => m.calamityZone?.name).filter(Boolean).join('\n')}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${RELIEF_META.dot}`} />
+                        {RELIEF_META.label}
+                        {matches.length > 1 && ` (${matches.length})`}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                   {new Date(sub.createdAt).toLocaleString()}
