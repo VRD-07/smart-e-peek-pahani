@@ -97,6 +97,33 @@ describe('Validation Engine', () => {
     expect(result.checks.location.distanceFromBoundary).toBeGreaterThan(0);
   });
 
+  it('inside the Gat but close to its edge should REVIEW, not auto-approve', async () => {
+    // mockGat's northern edge is at 19.1240; this sits ~8m south of it, well
+    // within the 15m review band on a parcel this size (~105m across).
+    mockSubmission.location.latitude = 19.12392786;
+    mockVisionProvider.classify.mockResolvedValue({ detectedCrop: 'soybean', confidence: 0.95 });
+
+    const result = await runValidationEngine(mockSubmission, mockFarmer, mockGat);
+
+    expect(result.overallStatus).toBe('REVIEW');
+    expect(result.checks.location.status).toBe('REVIEW');
+    // The geofence itself passed — this is not the same outcome as a filing from
+    // outside the Gat, and the record has to keep the two distinguishable.
+    expect(result.checks.location.insideGat).toBe(true);
+    expect(result.checks.location.reasonCode).toBe('NEAR_BOUNDARY');
+    expect(mockSubmission.status).toBe('REVIEW');
+  });
+
+  it('a near-boundary review should give the officer a quantified reason', async () => {
+    mockSubmission.location.latitude = 19.12392786;
+    mockVisionProvider.classify.mockResolvedValue({ detectedCrop: 'soybean', confidence: 0.95 });
+
+    const result = await runValidationEngine(mockSubmission, mockFarmer, mockGat);
+
+    expect(result.reasons.some(r => r.includes('from the boundary'))).toBe(true);
+    expect(result.checks.location.reviewBufferMeters).toBeGreaterThan(0);
+  });
+
   it('crop mismatch should FAIL or REVIEW depending on confidence', async () => {
     mockVisionProvider.classify.mockResolvedValue({ detectedCrop: 'cotton', confidence: 0.92 });
 

@@ -126,6 +126,7 @@ export const SubmissionStatus = () => {
 
     const config = statusConfig[overallStatus] || statusConfig.REVIEW;
     const Icon = config.icon;
+    const isReview = overallStatus === 'REVIEW' || overallStatus === 'PENDING_VALIDATION';
 
     return (
       <div className="text-center space-y-4">
@@ -175,14 +176,28 @@ export const SubmissionStatus = () => {
             )}
 
             {validation.reasons && validation.reasons.length > 0 && (
-              <div className="bg-red-50 p-4 rounded-xl text-sm">
-                <h4 className="font-semibold text-red-800 mb-2">Issues found:</h4>
-                <ul className="list-disc list-inside text-red-700 space-y-1">
-                  {validation.reasons.map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              </div>
+              // A REVIEW is not a rejection. A filing sent to an officer because
+              // the GPS reading sat close to the Gat edge has nothing wrong with
+              // it, and must not be shown to the farmer in red as an "issue".
+              isReview ? (
+                <div className="bg-amber-50 p-4 rounded-xl text-sm">
+                  <h4 className="font-semibold text-amber-800 mb-2">Sent for review because:</h4>
+                  <ul className="list-disc list-inside text-amber-700 space-y-1">
+                    {validation.reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="bg-red-50 p-4 rounded-xl text-sm">
+                  <h4 className="font-semibold text-red-800 mb-2">Issues found:</h4>
+                  <ul className="list-disc list-inside text-red-700 space-y-1">
+                    {validation.reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )
             )}
           </div>
         )}

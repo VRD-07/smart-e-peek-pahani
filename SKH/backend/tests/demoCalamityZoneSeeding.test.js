@@ -30,7 +30,7 @@ let mongoServer;
 
 const demoGatPolygon = (gatNumber) => {
   const coord = GAT_COORDS.find((c) => c.id === gatNumber);
-  return createPolygon(coord.lat, coord.lng);
+  return createPolygon(coord.lat, coord.lng, coord.offset);
 };
 
 const zoneByName = (fragment) => DEMO_ZONES.find((z) => z.name.includes(fragment));

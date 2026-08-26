@@ -21,6 +21,10 @@ module.exports = {
   // Below this confidence a transcript is not treated as a crop declaration and
   // the farmer is asked to type the name instead.
   sttMinConfidence: process.env.STT_MIN_CONFIDENCE || '0.70',
+  // Submissions inside a Gat but within this many metres of its edge are routed
+  // to human review instead of auto-approved. Capped by parcel size at runtime so
+  // small plots are not put entirely under review.
+  nearBoundaryThresholdMeters: process.env.NEAR_BOUNDARY_THRESHOLD_METERS || '15',
   storageProvider: process.env.STORAGE_PROVIDER || 'cloudinary',
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,

@@ -24,18 +24,18 @@ beforeEach(async () => {
 
 describe('Phase 7 - Demo Gat Seeding Verification', () => {
 
-  it('should seed 5 demo gats and verify cross-gat constraints', async () => {
+  it('should seed 6 demo gats and verify cross-gat constraints', async () => {
     // 1. Run Seeder
     await seed(true); // skipConnect = true
 
-    // 2. Verify 5 Gats exist
+    // 2. Verify 6 Gats exist
     const gats = await Gat.find({}).sort({ gatNumber: 1 });
-    expect(gats.length).toBe(5);
+    expect(gats.length).toBe(GAT_COORDS.length);
 
-    // 3. Verify Farmer has 5 associations
+    // 3. Verify Farmer has an association per Gat
     const farmer = await Farmer.findOne({ phoneNumber: '1234567890' });
     expect(farmer).toBeDefined();
-    expect(farmer.associatedGats.length).toBe(5);
+    expect(farmer.associatedGats.length).toBe(GAT_COORDS.length);
 
     // 4. Verify each Gat center is inside its own polygon and has proper format
     for (const gat of gats) {
@@ -96,7 +96,7 @@ describe('Phase 7 - Demo Gat Seeding Verification', () => {
 
     expect(gatBContainsGatACenter).toBeNull();
 
-    // Verify all 5 centers fall ONLY into their respective Gats
+    // Verify every center falls ONLY into its own Gat
     for (const coord of GAT_COORDS) {
       const intersectingGats = await Gat.find({
         boundary: {
@@ -120,9 +120,9 @@ describe('Phase 7 - Demo Gat Seeding Verification', () => {
     await seed(true); // run twice
 
     const gatsCount = await Gat.countDocuments();
-    expect(gatsCount).toBe(5); // should not duplicate
+    expect(gatsCount).toBe(GAT_COORDS.length); // should not duplicate
 
     const farmer = await Farmer.findOne({ phoneNumber: '1234567890' });
-    expect(farmer.associatedGats.length).toBe(5); // array should not duplicate
+    expect(farmer.associatedGats.length).toBe(GAT_COORDS.length); // array should not duplicate
   });
 });
