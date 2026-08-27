@@ -52,6 +52,7 @@ async function seed(skipConnect = false) {
         village: 'Demo Village',
         district: 'Nashik', // Reasonable district for these coordinates
         cropTypes: ['soybean', 'wheat', 'cotton', 'maize'],
+        registeredArea: coord.id === '106' ? 2.5 : 1.2,
         center: { latitude: coord.lat, longitude: coord.lng },
         boundary: boundary
       };

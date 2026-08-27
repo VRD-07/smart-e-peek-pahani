@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Header, OnlineStatus } from './components/common';
-import { Home, FarmerOnboarding, SubmissionStatus, OfflineQueue, AdminDashboard, WebBridge, Login, OfficerDashboard, OfficerLogin } from './pages';
+import { Home, FarmerOnboarding, SubmissionStatus, OfflineQueue, AdminDashboard, WebBridge, Login, OfficerDashboard, OfficerLogin, DemoControlPanel } from './pages';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('smart_e_peek_token');
@@ -51,6 +51,7 @@ function App() {
                 <OfficerDashboard />
               </OfficerRoute>
             } />
+            <Route path="/demo" element={<DemoControlPanel />} />
             <Route path="*" element={<div className="p-8 text-center text-gray-500">Page not found</div>} />
           </Routes>
         </main>

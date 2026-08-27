@@ -87,6 +87,8 @@ app.use('/api/bridge', bridgeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
+const demoRoutes = require('./src/routes/demoRoutes');
+app.use('/api/demo', demoRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

@@ -7,3 +7,4 @@ export * from './WebBridge';
 export * from './Login';
 export * from './OfficerDashboard';
 export * from './OfficerDashboard/OfficerLogin';
+export * from './DemoControlPanel';
