@@ -1,0 +1,43 @@
+services:
+  # Backend API Web Service
+  - type: web
+    name: smart-e-peek-backend
+    env: node
+    region: singapore
+    plan: free
+    rootDir: SKH/backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: NOTIFICATION_PROVIDER
+        value: mock
+      - key: VISION_PROVIDER
+        value: mock
+      - key: STT_PROVIDER
+        value: mock
+      - key: STORAGE_PROVIDER
+        value: mock
+      - key: MONGODB_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
