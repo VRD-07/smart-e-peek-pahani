@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { LogOut, Map as MapIcon, RefreshCw, Table as TableIcon } from 'lucide-react';
 import api from '../../services/api';
 import { FilterBar } from './FilterBar';
+import { ReachStats } from './ReachStats';
 import { SubmissionsTable } from './SubmissionsTable';
 import { SubmissionsMap } from './SubmissionsMap';
 import { clearOfficerSession, getStoredOfficer, RELIEF_META, statusMeta } from './statusMeta';
@@ -175,6 +176,11 @@ export const OfficerDashboard = () => {
           <div className="text-2xl font-bold text-gray-900">{reliefEligibleCount}</div>
         </button>
       </div>
+
+      {/* Outbound reminders, not submissions — its own block rather than another
+          card in the grid above, because it counts farmers contacted rather than
+          filings received. */}
+      <ReachStats />
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
         <FilterBar

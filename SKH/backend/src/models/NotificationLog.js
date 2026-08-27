@@ -2,15 +2,21 @@ const mongoose = require('mongoose');
 const {
   NOTIFICATION_TYPES,
   NOTIFICATION_STATUS,
+  CHANNELS,
 } = require('../services/notifications/constants');
 
 /**
- * Audit trail for every outbound WhatsApp notification.
+ * Audit trail for every outbound notification attempt, on every channel.
  *
- * Doubles as the de-duplication ledger: the awareness job checks for an
- * existing SENT row before dispatching, so re-running the cron (or running it
- * manually during a demo) does not message the same farmer twice. A FAILED row
- * is left retryable and upgraded to SENT on a later run.
+ * One row per (number, message, channel). A single deadline reminder that
+ * escalates all the way therefore leaves three rows sharing a dedupeKey — that
+ * grouping is what the Officer Dashboard's reach stat block reads, and what tells
+ * an auditor which channel actually got through.
+ *
+ * Doubles as the de-duplication ledger: the awareness job checks for an existing
+ * SENT row before dispatching, so re-running the cron (or running it manually
+ * during a demo) does not message the same farmer twice on the same channel. A
+ * FAILED row is left retryable and upgraded to SENT on a later run.
  */
 const notificationLogSchema = new mongoose.Schema({
   // Stored in the same 'whatsapp:+91...' form Twilio uses for inbound webhooks,
@@ -32,6 +38,8 @@ const notificationLogSchema = new mongoose.Schema({
   },
   // Identifies the specific thing being notified about, e.g.
   // '<deadlineId>:7' for the 7-day reminder or 'FIRST_CONTACT' for the intro.
+  // Shared across channels for one message, which is what makes an escalation
+  // ladder groupable.
   dedupeKey: {
     type: String,
     required: true,
@@ -43,8 +51,8 @@ const notificationLogSchema = new mongoose.Schema({
   },
   channel: {
     type: String,
-    enum: ['WHATSAPP'],
-    default: 'WHATSAPP',
+    enum: Object.values(CHANNELS),
+    default: CHANNELS.WHATSAPP,
   },
   provider: {
     type: String,
@@ -56,6 +64,23 @@ const notificationLogSchema = new mongoose.Schema({
   },
   providerMessageId: {
     type: String,
+  },
+  // How many times we have handed this channel to the provider. A rejected send
+  // is retried on the next sweep rather than escalated past, so the ladder needs
+  // to know when to stop retrying — see MAX_CHANNEL_SEND_ATTEMPTS.
+  attempts: {
+    type: Number,
+    default: 0,
+  },
+  // The provider's own last-known delivery state ('sent', 'delivered', 'read',
+  // 'undelivered', 'no-answer', ...) rather than a normalized enum, so the audit
+  // row records what Twilio actually said. Deliberately not an enum: a new
+  // provider status must not be able to throw and take a sweep down with it.
+  deliveryStatus: {
+    type: String,
+  },
+  deliveryCheckedAt: {
+    type: Date,
   },
   body: {
     type: String,
@@ -70,7 +95,9 @@ const notificationLogSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-notificationLogSchema.index({ phoneNumber: 1, type: 1, dedupeKey: 1 }, { unique: true });
+// Channel is part of the key: an SMS fallback for a reminder already tried on
+// WhatsApp is a separate attempt, not a duplicate of it.
+notificationLogSchema.index({ phoneNumber: 1, type: 1, dedupeKey: 1, channel: 1 }, { unique: true });
 
 const NotificationLog = mongoose.model('NotificationLog', notificationLogSchema);
 

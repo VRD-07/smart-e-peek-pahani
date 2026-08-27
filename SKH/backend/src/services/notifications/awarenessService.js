@@ -4,52 +4,26 @@ const Submission = require('../../models/Submission');
 const SchemeDeadline = require('../../models/SchemeDeadline');
 const NotificationLog = require('../../models/NotificationLog');
 const { getMessage } = require('../whatsapp/messages');
-const { getNotificationProvider } = require('./notificationFactory');
+const {
+  escalateNotification,
+  runEscalation,
+  sendOnChannel,
+  summarizeAttempts,
+} = require('./escalationService');
+const {
+  toWhatsAppAddress,
+  daysBetween,
+  formatDeadlineDate,
+} = require('./addressing');
 const {
   NOTIFICATION_TYPES,
   NOTIFICATION_STATUS,
+  CHANNELS,
+  ESCALATION_ORDER,
+  ESCALATION_ACTIONS,
   FILED_SUBMISSION_STATUSES,
   DEDUPE_KEYS,
 } = require('./constants');
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-// Numbers reach us from Twilio as 'whatsapp:+91...', and the repo stores the
-// inbound `From` value verbatim on the Farmer record. Rather than migrate that
-// data, outbound sends normalize at the boundary. Bare 10-digit numbers (as used
-// by the demo seed) are assumed Indian.
-const DEFAULT_COUNTRY_CODE = '91';
-
-function toWhatsAppAddress(phoneNumber) {
-  if (!phoneNumber) return null;
-
-  const value = phoneNumber.toString().trim();
-  if (value.startsWith('whatsapp:')) return value;
-  if (value.startsWith('+')) return `whatsapp:${value}`;
-
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return null;
-
-  return digits.length > 10
-    ? `whatsapp:+${digits}`
-    : `whatsapp:+${DEFAULT_COUNTRY_CODE}${digits}`;
-}
-
-/** Whole calendar days between two dates, computed in UTC so it is testable. */
-function daysBetween(from, to) {
-  const dayStart = (value) => {
-    const d = new Date(value);
-    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  };
-  return Math.round((dayStart(to) - dayStart(from)) / MS_PER_DAY);
-}
-
-/** DD/MM/YYYY — the format used on Indian government forms, and stable across ICU versions. */
-function formatDeadlineDate(value) {
-  const d = new Date(value);
-  const pad = (n) => n.toString().padStart(2, '0');
-  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-}
 
 /**
  * Which reminder bucket, if any, is due for this deadline today.
@@ -73,47 +47,40 @@ function dueReminderOffset(deadline, now = new Date()) {
 /**
  * Sends one WhatsApp notification and records it.
  *
- * De-duplicates on (phoneNumber, type, dedupeKey): an existing SENT row short
- * circuits, so re-running the job — or running it manually mid-demo — will not
- * message the same farmer twice. A FAILED row stays retryable.
+ * The single-channel path, for notifications that have no business waking someone
+ * with a phone call: the first-contact intro and the calamity-relief notice. The
+ * escalating path is escalateFarmerReminder.
+ *
+ * De-duplicates on (phoneNumber, type, dedupeKey, WHATSAPP): an existing SENT row
+ * short circuits, so re-running the job — or running it manually mid-demo — will
+ * not message the same farmer twice. A FAILED row stays retryable.
  *
  * @returns {Promise<{status: 'SENT'|'FAILED'|'SKIPPED', reason?: string}>}
  */
 async function dispatchNotification({ phoneNumber, farmerId = null, type, dedupeKey, language = 'mr', body }) {
-  const to = toWhatsAppAddress(phoneNumber);
-  if (!to) {
-    return { status: 'SKIPPED', reason: 'INVALID_RECIPIENT' };
-  }
-
-  const existing = await NotificationLog.findOne({ phoneNumber, type, dedupeKey });
+  const existing = await NotificationLog.findOne({
+    phoneNumber,
+    type,
+    dedupeKey,
+    channel: CHANNELS.WHATSAPP,
+  });
   if (existing && existing.status === NOTIFICATION_STATUS.SENT) {
     return { status: 'SKIPPED', reason: 'ALREADY_SENT' };
   }
 
-  const provider = getNotificationProvider();
-  const result = await provider.sendMessage(to, body);
-  const sent = !result.error;
-
-  const logEntry = {
+  const result = await sendOnChannel({
+    channel: CHANNELS.WHATSAPP,
+    phoneNumber,
     farmerId,
+    type,
+    dedupeKey,
     language,
-    provider: provider.name,
     body,
-    status: sent ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
-    providerMessageId: sent ? result.messageId : undefined,
-    error: sent ? undefined : `${result.error}: ${result.message || ''}`.trim(),
-    sentAt: sent ? new Date() : undefined,
-  };
+  });
 
-  await NotificationLog.findOneAndUpdate(
-    { phoneNumber, type, dedupeKey },
-    { $set: logEntry },
-    { upsert: true, new: true }
-  );
-
-  return sent
+  return result.status === ESCALATION_ACTIONS.SENT
     ? { status: 'SENT' }
-    : { status: 'FAILED', reason: result.error };
+    : { status: result.status, reason: result.reason };
 }
 
 /**
@@ -121,9 +88,9 @@ async function dispatchNotification({ phoneNumber, farmerId = null, type, dedupe
  *
  * Called on first contact from an unknown number, so it also reaches people who
  * are not registered farmers yet — which is the point, since the farmers who
- * miss out on relief are the ones who never filed at all. Sent as text; the
- * NotificationProvider interface would carry a pre-recorded voice note the same
- * way once one is produced.
+ * miss out on relief are the ones who never filed at all. WhatsApp only: someone
+ * who has just messaged the bot is demonstrably on WhatsApp, so there is nothing
+ * for the ladder to escalate to.
  */
 async function sendAwarenessIntro(phoneNumber, language = 'mr', farmerId = null) {
   return dispatchNotification({
@@ -183,17 +150,74 @@ function buildReminderBody(deadline, language, now = new Date()) {
 }
 
 /**
+ * The same reminder cut down to what survives an SMS.
+ *
+ * Not a truncation of the WhatsApp body: it drops the explanation and keeps the
+ * deadline, the consequence and the one action, because a Devanagari SMS gets
+ * 70 characters per segment.
+ */
+function buildSmsReminderBody(deadline, language) {
+  return getMessage('SMS_DEADLINE_REMINDER', language, {
+    season: getMessage(`SEASON_${deadline.season}`, language),
+    year: deadline.year,
+    date: formatDeadlineDate(deadline.deadlineDate),
+  });
+}
+
+/** The dedupe key that identifies one reminder bucket for one deadline. */
+function reminderDedupeKey(deadline, offsetDays) {
+  const id = deadline._id ? deadline._id.toString() : String(deadline);
+  return `${id}:${offsetDays}`;
+}
+
+/**
+ * Advances one farmer's reminder down the WhatsApp → SMS → voice ladder.
+ *
+ * A reusable service function rather than logic living inside the cron job,
+ * because three callers need it: the daily sweep, the officer-facing manual
+ * trigger, and the internal demo panel.
+ *
+ * @param {boolean} [options.force] - Ignore the elapsed-time windows so the whole
+ *   ladder can be walked now instead of over two days.
+ */
+async function escalateFarmerReminder(farmer, deadline, offsetDays, { now = new Date(), force = false } = {}) {
+  const language = farmer.preferredLanguage || 'mr';
+
+  return escalateNotification({
+    phoneNumber: farmer.phoneNumber,
+    farmerId: farmer._id,
+    type: NOTIFICATION_TYPES.DEADLINE_REMINDER,
+    dedupeKey: reminderDedupeKey(deadline, offsetDays),
+    language,
+    bodies: {
+      [CHANNELS.WHATSAPP]: buildReminderBody(deadline, language, now),
+      [CHANNELS.SMS]: buildSmsReminderBody(deadline, language),
+      // VOICE carries no text — it plays the pre-recorded asset for this
+      // notification type. See voiceMessages.js.
+    },
+    now,
+    force,
+  });
+}
+
+/**
  * Scans active scheme deadlines and reminds every farmer with no filing for the
- * season. Safe to run repeatedly — see dispatchNotification for de-duplication.
+ * season, one rung of the escalation ladder per sweep.
+ *
+ * Safe to run repeatedly: a farmer whose WhatsApp reminder is still inside its
+ * confirmation window is left alone rather than re-messaged, so the daily cron is
+ * what paces the ladder.
  *
  * @returns {Promise<Object>} counts plus a per-deadline breakdown
  */
-async function runDeadlineReminders({ now = new Date() } = {}) {
+async function runDeadlineReminders({ now = new Date(), force = false } = {}) {
   const summary = {
     deadlinesDue: 0,
     remindersSent: 0,
     skipped: 0,
     failed: 0,
+    exhausted: 0,
+    byChannel: { [CHANNELS.WHATSAPP]: 0, [CHANNELS.SMS]: 0, [CHANNELS.VOICE]: 0 },
     deadlines: [],
   };
 
@@ -215,26 +239,27 @@ async function runDeadlineReminders({ now = new Date() } = {}) {
       sent: 0,
       skipped: 0,
       failed: 0,
+      exhausted: 0,
     };
 
     for (const farmer of farmers) {
-      const language = farmer.preferredLanguage || 'mr';
-      const result = await dispatchNotification({
-        phoneNumber: farmer.phoneNumber,
-        farmerId: farmer._id,
-        type: NOTIFICATION_TYPES.DEADLINE_REMINDER,
-        dedupeKey: `${deadline._id.toString()}:${offsetDays}`,
-        language,
-        body: buildReminderBody(deadline, language, now),
-      });
+      const result = await escalateFarmerReminder(farmer, deadline, offsetDays, { now, force });
 
-      if (result.status === 'SENT') {
+      if (result.action === ESCALATION_ACTIONS.SENT) {
         detail.sent += 1;
         summary.remindersSent += 1;
-      } else if (result.status === 'FAILED') {
+        summary.byChannel[result.channel] += 1;
+      } else if (result.action === ESCALATION_ACTIONS.FAILED) {
         detail.failed += 1;
         summary.failed += 1;
+      } else if (result.action === ESCALATION_ACTIONS.EXHAUSTED) {
+        // Every channel tried, none confirmed. Counted separately from `failed`
+        // so the sweep's own errors stay distinguishable from farmers we simply
+        // could not reach.
+        detail.exhausted += 1;
+        summary.exhausted += 1;
       } else {
+        // REACHED (already confirmed) or WAITING (window still open).
         detail.skipped += 1;
         summary.skipped += 1;
       }
@@ -246,6 +271,190 @@ async function runDeadlineReminders({ now = new Date() } = {}) {
   return summary;
 }
 
+/**
+ * Fires the escalation ladder for one farmer immediately.
+ *
+ * Backs the officer-facing manual trigger and, in Phase 8, the demo panel's
+ * SMS/voice buttons — which is why it takes `upToChannel`: "show me the SMS
+ * fallback" should not also place a phone call.
+ *
+ * @param {Object} params
+ * @param {string} [params.farmerId] - Either this or phoneNumber.
+ * @param {string} [params.phoneNumber]
+ * @param {boolean} [params.force=true] - Defaults to true: the entire point of a
+ *   manual trigger is to skip the real time windows.
+ * @param {string} [params.upToChannel] - Stop after this rung.
+ */
+async function escalateForFarmer({
+  farmerId = null,
+  phoneNumber = null,
+  upToChannel = CHANNELS.VOICE,
+  force = true,
+  now = new Date(),
+} = {}) {
+  const farmer = farmerId
+    ? await Farmer.findById(farmerId)
+    : await Farmer.findOne({ phoneNumber });
+
+  if (!farmer) return { error: 'FARMER_NOT_FOUND' };
+
+  // The bucket the farmer would be reminded about right now. Falling back to the
+  // nearest active deadline keeps the trigger usable outside a reminder window,
+  // which is where a demo usually sits.
+  const deadlines = await SchemeDeadline.find({ isActive: true }).sort({ deadlineDate: 1 });
+  if (deadlines.length === 0) return { error: 'NO_ACTIVE_DEADLINE' };
+
+  let deadline = null;
+  let offsetDays = null;
+
+  for (const candidate of deadlines) {
+    const due = dueReminderOffset(candidate, now);
+    if (due !== null) {
+      deadline = candidate;
+      offsetDays = due;
+      break;
+    }
+  }
+
+  if (!deadline) {
+    deadline = deadlines[0];
+    // No bucket is due, so label the attempt with the tightest configured offset
+    // rather than inventing one. The dedupe key stays honest about which bucket
+    // this belongs to.
+    const offsets = (deadline.reminderOffsetsDays || []).filter(Number.isFinite).sort((a, b) => a - b);
+    offsetDays = offsets.length > 0 ? offsets[0] : 0;
+  }
+
+  const language = farmer.preferredLanguage || 'mr';
+
+  const result = await runEscalation({
+    phoneNumber: farmer.phoneNumber,
+    farmerId: farmer._id,
+    type: NOTIFICATION_TYPES.DEADLINE_REMINDER,
+    dedupeKey: reminderDedupeKey(deadline, offsetDays),
+    language,
+    bodies: {
+      [CHANNELS.WHATSAPP]: buildReminderBody(deadline, language, now),
+      [CHANNELS.SMS]: buildSmsReminderBody(deadline, language),
+    },
+    now,
+    force,
+  }, { upToChannel });
+
+  return {
+    farmer: {
+      id: farmer._id.toString(),
+      name: farmer.name,
+      phoneNumber: farmer.phoneNumber,
+      preferredLanguage: language,
+    },
+    deadline: {
+      id: deadline._id.toString(),
+      season: deadline.season,
+      year: deadline.year,
+      offsetDays,
+    },
+    ...result,
+  };
+}
+
+/**
+ * The reminder bucket each active deadline is currently on.
+ *
+ * Prefers the bucket that is due right now. Outside a reminder window it falls
+ * back to the most recent bucket that actually produced log rows, so the
+ * dashboard keeps showing the last cycle's outcome instead of going blank.
+ */
+async function currentReminderCycles(now = new Date()) {
+  const deadlines = await SchemeDeadline.find({ isActive: true }).sort({ deadlineDate: 1 });
+  const cycles = [];
+
+  for (const deadline of deadlines) {
+    const id = deadline._id.toString();
+    const due = dueReminderOffset(deadline, now);
+    let dedupeKey = due === null ? null : reminderDedupeKey(deadline, due);
+    let offsetDays = due;
+
+    if (!dedupeKey) {
+      const latest = await NotificationLog.findOne({
+        type: NOTIFICATION_TYPES.DEADLINE_REMINDER,
+        dedupeKey: new RegExp(`^${id}:`),
+      }).sort({ createdAt: -1 });
+
+      if (!latest) continue;
+      dedupeKey = latest.dedupeKey;
+      offsetDays = Number.parseInt(dedupeKey.split(':')[1], 10);
+    }
+
+    cycles.push({
+      deadlineId: id,
+      season: deadline.season,
+      year: deadline.year,
+      offsetDays,
+      dedupeKey,
+    });
+  }
+
+  return cycles;
+}
+
+/**
+ * Which channel reached each farmer in the current reminder cycle.
+ *
+ * Reads the stored delivery status rather than polling the provider: this backs a
+ * dashboard the officer may refresh repeatedly, and one API call per log row per
+ * refresh is not a trade worth making. The statuses are refreshed by the daily
+ * sweep, which is the thing that acts on them.
+ *
+ * `reached` counts confirmed delivery per channel. `attempted` counts sends,
+ * confirmed or not — reported separately because most sends sit unconfirmed for a
+ * while, and a block showing only `reached` would read as though nothing had been
+ * sent at all.
+ */
+async function reminderReachStats({ now = new Date() } = {}) {
+  const cycles = await currentReminderCycles(now);
+
+  const stats = {
+    cycles,
+    total: 0,
+    reached: { [CHANNELS.WHATSAPP]: 0, [CHANNELS.SMS]: 0, [CHANNELS.VOICE]: 0 },
+    attempted: { [CHANNELS.WHATSAPP]: 0, [CHANNELS.SMS]: 0, [CHANNELS.VOICE]: 0 },
+    unreached: 0,
+    pending: 0,
+  };
+
+  if (cycles.length === 0) return stats;
+
+  const logs = await NotificationLog.find({
+    type: NOTIFICATION_TYPES.DEADLINE_REMINDER,
+    dedupeKey: { $in: cycles.map((c) => c.dedupeKey) },
+  });
+
+  // One farmer may appear under several deadlines; group per (number, cycle) so
+  // each reminder is judged on its own ladder.
+  const groups = new Map();
+  for (const log of logs) {
+    const key = `${log.phoneNumber}|${log.dedupeKey}`;
+    if (!groups.has(key)) groups.set(key, {});
+    groups.get(key)[log.channel] = log;
+  }
+
+  for (const attempts of groups.values()) {
+    const outcome = summarizeAttempts(attempts);
+    stats.total += 1;
+
+    for (const channel of ESCALATION_ORDER) {
+      if (attempts[channel]) stats.attempted[channel] += 1;
+    }
+
+    if (outcome.reachedVia) stats.reached[outcome.reachedVia] += 1;
+    else if (outcome.unreached) stats.unreached += 1;
+    else stats.pending += 1;
+  }
+
+  return stats;
+}
+
 module.exports = {
   runDeadlineReminders,
   sendAwarenessIntro,
@@ -253,6 +462,14 @@ module.exports = {
   findFarmersNeedingReminder,
   dueReminderOffset,
   buildReminderBody,
+  buildSmsReminderBody,
+  reminderDedupeKey,
+  escalateFarmerReminder,
+  escalateForFarmer,
+  currentReminderCycles,
+  reminderReachStats,
+  // Re-exported from addressing.js, which they moved to when SMS and voice
+  // needed them too. Kept here so existing callers do not have to change.
   toWhatsAppAddress,
   daysBetween,
   formatDeadlineDate,

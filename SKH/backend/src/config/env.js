@@ -8,6 +8,24 @@ module.exports = {
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
   twilioWhatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER,
+  // Separate senders per channel: the WhatsApp sandbox number cannot send SMS and
+  // cannot place calls. Left unset, those two rungs of the escalation ladder
+  // report SENDER_NOT_CONFIGURED instead of failing the whole notification.
+  twilioSmsNumber: process.env.TWILIO_SMS_NUMBER,
+  twilioVoiceNumber: process.env.TWILIO_VOICE_NUMBER,
+  // Publicly reachable base URL for the pre-recorded voice files in assets/voice/.
+  // Twilio fetches the audio itself, so localhost will not do — unset falls back
+  // to <Say>, which has no Marathi voice and is a stopgap, not the intended path.
+  voiceAudioBaseUrl: process.env.VOICE_AUDIO_BASE_URL,
+  // How long to wait for a confirmation on a channel before escalating to the
+  // next one. Config rather than constants so a demo can set both to 0 and walk
+  // the whole ladder in a single sweep.
+  escalationWhatsappWindowHours: process.env.ESCALATION_WHATSAPP_WINDOW_HOURS || '24',
+  escalationSmsWindowHours: process.env.ESCALATION_SMS_WINDOW_HOURS || '24',
+  // Whether a WhatsApp message must be *read* rather than merely delivered to
+  // count as having reached the farmer. See whatsappRequiresRead() for the
+  // trade-off — farmers with read receipts off are always escalated when true.
+  escalationWhatsappRequireRead: process.env.ESCALATION_WHATSAPP_REQUIRE_READ || 'true',
   // Outbound WhatsApp notifications (deadline reminders, awareness intros).
   // Defaults to 'mock' so the awareness job is demoable without live credentials.
   notificationProvider: process.env.NOTIFICATION_PROVIDER || 'mock',

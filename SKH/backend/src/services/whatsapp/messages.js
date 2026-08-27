@@ -31,7 +31,16 @@ const DICTIONARY = {
     CALAMITY_CYCLONE: 'चक्रीवादळ',
     CALAMITY_UNSEASONAL_RAIN: 'अवकाळी पाऊस',
     CALAMITY_OTHER: 'नैसर्गिक आपत्ती',
-    CALAMITY_RELIEF_MATCH: 'तुमच्या नोंदणीकृत शेतासाठी आपत्ती जाहीर झाली आहे.\n\nआपत्ती: {{calamity}}\nशेत: गट {{gat}}\nजाहीर दिनांक: {{declaredDate}}\n\nतुमची {{date}} रोजीची पडताळणी झालेली {{crop}} नोंद तुम्हाला नुकसान भरपाईसाठी पात्र ठरवू शकते.\n\nपुढील पायरी: तुमच्या गावातील तलाठ्यांशी संपर्क साधा आणि भरपाईची पडताळणी सुरू झाल्यावर ही पीक नोंद सांगा.\n\nहा संदेश मंजुरी नाही. पात्रता महसूल कार्यालय ठरवते — ही नोंद ते तपासणारा पुरावा आहे.'
+    CALAMITY_RELIEF_MATCH: 'तुमच्या नोंदणीकृत शेतासाठी आपत्ती जाहीर झाली आहे.\n\nआपत्ती: {{calamity}}\nशेत: गट {{gat}}\nजाहीर दिनांक: {{declaredDate}}\n\nतुमची {{date}} रोजीची पडताळणी झालेली {{crop}} नोंद तुम्हाला नुकसान भरपाईसाठी पात्र ठरवू शकते.\n\nपुढील पायरी: तुमच्या गावातील तलाठ्यांशी संपर्क साधा आणि भरपाईची पडताळणी सुरू झाल्यावर ही पीक नोंद सांगा.\n\nहा संदेश मंजुरी नाही. पात्रता महसूल कार्यालय ठरवते — ही नोंद ते तपासणारा पुरावा आहे.',
+    // SMS fallback copy: the same message stripped to what survives a text.
+    // No emoji, no line-art, no long paragraphs. Devanagari forces UCS-2
+    // encoding, so an SMS segment holds 70 characters rather than 160 — these
+    // are written to fit two segments, which is why they say less than the
+    // WhatsApp versions rather than being a truncation of them.
+    SMS_DEADLINE_REMINDER: 'ई-पीक पाहणी: {{season}} {{year}} अंतिम तारीख {{date}}. तुमची पीक नोंद नाही. नोंदीशिवाय नुकसान भरपाई मिळत नाही. नोंदणीसाठी WhatsApp वर Hi पाठवा.',
+    SMS_CALAMITY_RELIEF: 'ई-पीक पाहणी: तुमच्या गट {{gat}} साठी {{calamity}} जाहीर. तुमची पडताळणी झालेली नोंद भरपाईसाठी पात्र ठरू शकते. तलाठ्यांशी संपर्क साधा. ही मंजुरी नाही.',
+    SMS_SUBMISSION_REVIEW: 'ई-पीक पाहणी: तुमची पीक नोंद मिळाली, पण ती अधिकाऱ्यांच्या तपासणीसाठी पाठवली आहे. नोंद रद्द झालेली नाही. पुन्हा नोंद करू नका.',
+    SMS_AWARENESS_INTRO: 'ई-पीक पाहणी: शेतातील पिकाची शासकीय नोंद शेतकऱ्याने स्वतः करायची असते. नोंदीशिवाय नुकसान भरपाई मिळत नाही. नोंदणीसाठी WhatsApp वर Hi पाठवा.'
   },
   [LANGUAGES.HI]: {
     WELCOME: 'नमस्ते! ई-पीक पाहणी में आपका स्वागत है। कृपया अपनी भाषा चुनें:\n1. मराठी\n2. हिंदी\n3. English',
@@ -60,7 +69,11 @@ const DICTIONARY = {
     CALAMITY_CYCLONE: 'चक्रवात',
     CALAMITY_UNSEASONAL_RAIN: 'बेमौसम बारिश',
     CALAMITY_OTHER: 'प्राकृतिक आपदा',
-    CALAMITY_RELIEF_MATCH: 'आपके पंजीकृत खेत के लिए आपदा घोषित की गई है।\n\nआपदा: {{calamity}}\nखेत: गट {{gat}}\nघोषणा दिनांक: {{declaredDate}}\n\n{{date}} की आपकी सत्यापित {{crop}} नोंद आपको मुआवज़े के लिए पात्र बना सकती है।\n\nअगला कदम: अपने गाँव के तलाठी से संपर्क करें और मुआवज़े का आकलन शुरू होने पर यह फसल रिकॉर्ड बताएं।\n\nयह संदेश स्वीकृति नहीं है। पात्रता राजस्व कार्यालय तय करता है — यह रिकॉर्ड वही सबूत है जिसकी वे जाँच करते हैं।'
+    CALAMITY_RELIEF_MATCH: 'आपके पंजीकृत खेत के लिए आपदा घोषित की गई है।\n\nआपदा: {{calamity}}\nखेत: गट {{gat}}\nघोषणा दिनांक: {{declaredDate}}\n\n{{date}} की आपकी सत्यापित {{crop}} नोंद आपको मुआवज़े के लिए पात्र बना सकती है।\n\nअगला कदम: अपने गाँव के तलाठी से संपर्क करें और मुआवज़े का आकलन शुरू होने पर यह फसल रिकॉर्ड बताएं।\n\nयह संदेश स्वीकृति नहीं है। पात्रता राजस्व कार्यालय तय करता है — यह रिकॉर्ड वही सबूत है जिसकी वे जाँच करते हैं।',
+    SMS_DEADLINE_REMINDER: 'ई-पीक पाहणी: {{season}} {{year}} अंतिम तारीख {{date}}. आपकी फसल का रिकॉर्ड नहीं है. रिकॉर्ड बिना मुआवज़ा नहीं मिलता. दर्ज करने के लिए WhatsApp पर Hi भेजें.',
+    SMS_CALAMITY_RELIEF: 'ई-पीक पाहणी: आपके गट {{gat}} के लिए {{calamity}} घोषित. आपका सत्यापित रिकॉर्ड मुआवज़े के लिए पात्र बना सकता है. तलाठी से संपर्क करें. यह स्वीकृति नहीं है.',
+    SMS_SUBMISSION_REVIEW: 'ई-पीक पाहणी: आपकी फसल नोंद मिली, पर वह अधिकारी की जाँच के लिए भेजी गई है. नोंद रद्द नहीं हुई है. दोबारा दर्ज न करें.',
+    SMS_AWARENESS_INTRO: 'ई-पीक पाहणी: खेत की फसल का सरकारी रिकॉर्ड किसान को खुद दर्ज करना होता है. रिकॉर्ड बिना मुआवज़ा नहीं मिलता. दर्ज करने के लिए WhatsApp पर Hi भेजें.'
   },
   [LANGUAGES.EN]: {
     WELCOME: 'Namaskar! 🙏\n\nWelcome to Smart E-Peek Pahani.\n\nPlease select your language:\n1. मराठी\n2. हिंदी\n3. English',
@@ -89,7 +102,11 @@ const DICTIONARY = {
     CALAMITY_CYCLONE: 'Cyclone',
     CALAMITY_UNSEASONAL_RAIN: 'Unseasonal rain',
     CALAMITY_OTHER: 'Natural calamity',
-    CALAMITY_RELIEF_MATCH: 'A calamity has been declared covering your registered field.\n\nCalamity: {{calamity}}\nField: Gat {{gat}}\nDeclared on: {{declaredDate}}\n\nYour verified {{crop}} submission from {{date}} may qualify you for relief.\n\nNext steps: contact your village talathi and quote this crop record when the relief assessment for your village opens.\n\nThis message is not an approval. Eligibility is decided by the revenue office — this record is the evidence they assess.'
+    CALAMITY_RELIEF_MATCH: 'A calamity has been declared covering your registered field.\n\nCalamity: {{calamity}}\nField: Gat {{gat}}\nDeclared on: {{declaredDate}}\n\nYour verified {{crop}} submission from {{date}} may qualify you for relief.\n\nNext steps: contact your village talathi and quote this crop record when the relief assessment for your village opens.\n\nThis message is not an approval. Eligibility is decided by the revenue office — this record is the evidence they assess.',
+    SMS_DEADLINE_REMINDER: 'E-Peek Pahani: {{season}} {{year}} closes {{date}}. No crop record on file. Without one, calamity relief cannot be claimed. Send Hi on WhatsApp to file.',
+    SMS_CALAMITY_RELIEF: 'E-Peek Pahani: {{calamity}} declared for your Gat {{gat}}. Your verified crop record may qualify you for relief. Contact your talathi. Not an approval.',
+    SMS_SUBMISSION_REVIEW: 'E-Peek Pahani: your crop record was received but sent to an officer for review. It has not been rejected. Please do not file it again.',
+    SMS_AWARENESS_INTRO: 'E-Peek Pahani: the government crop record for your field has to be filed by you. Without it, calamity relief cannot be claimed. Send Hi on WhatsApp to file.'
   }
 };
 
@@ -106,12 +123,15 @@ function interpolate(template, vars) {
 
 /**
  * Gets a translated message for a specific key and language.
- * Defaults to English if language is not set or not found.
- * Pass `vars` to fill {{token}} placeholders (used by awareness reminders).
+ *
+ * Defaults to Marathi, and falls back to Marathi for a key a translation is
+ * missing: the users are Marathi-first, so an untranslated string should surface
+ * in the language they read rather than in English. Pass `vars` to fill
+ * {{token}} placeholders (used by awareness reminders).
  */
-function getMessage(key, language = LANGUAGES.EN, vars = null) {
-  const langDict = DICTIONARY[language] || DICTIONARY[LANGUAGES.EN];
-  const template = langDict[key] || DICTIONARY[LANGUAGES.EN][key] || 'Message not found.';
+function getMessage(key, language = LANGUAGES.MR, vars = null) {
+  const langDict = DICTIONARY[language] || DICTIONARY[LANGUAGES.MR];
+  const template = langDict[key] || DICTIONARY[LANGUAGES.MR][key] || 'Message not found.';
   return interpolate(template, vars);
 }
 

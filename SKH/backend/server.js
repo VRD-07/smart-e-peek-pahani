@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -14,6 +15,7 @@ const validationRoutes = require('./src/routes/validationRoutes');
 const whatsappRoutes = require('./src/routes/whatsappRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const uploadRoutes = require('./src/routes/uploadRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
 
 // Connect to database
 if (process.env.NODE_ENV !== 'test') {
@@ -42,6 +44,26 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
+// Pre-recorded voice-call audio. Served outside /api because the fetcher is
+// Twilio's media service, not a logged-in client, and it must not be rate limited
+// alongside the app's own traffic.
+//
+// The resource policy is widened to cross-origin for this path only. The global
+// helmet() above has already set same-origin, which would make Twilio's fetch
+// fail, and passing `crossOriginResourcePolicy: false` here would merely skip
+// re-setting it rather than overriding what is already on the response.
+//
+// Twilio fetches over the public internet, so this only works behind a tunnel or
+// a deployed host — see VOICE_AUDIO_BASE_URL in .env.example.
+app.use(
+  '/assets/voice',
+  helmet.crossOriginResourcePolicy({ policy: 'cross-origin' }),
+  express.static(path.join(__dirname, 'assets', 'voice'), {
+    // The recordings change only when someone re-records them.
+    maxAge: '1h',
+  })
+);
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -64,6 +86,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/bridge', bridgeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

@@ -6,6 +6,11 @@ const { runDeadlineReminders } = require('../src/services/notifications/awarenes
  * Runs the deadline-reminder sweep once, immediately, instead of waiting for the
  * cron schedule. This is the demo entry point.
  *
+ * One sweep advances each farmer at most one rung of the escalation ladder
+ * (WhatsApp, then SMS, then a voice call), because the daily cron is what paces
+ * it. To walk the whole ladder for one farmer now, use
+ * `node scripts/runEscalation.js <phone>` instead.
+ *
  * With NOTIFICATION_PROVIDER=mock (the default) the messages are printed to the
  * console and nothing leaves the machine. Set NOTIFICATION_PROVIDER=twilio with
  * WhatsApp *sandbox* credentials to send for real — note the recipient must have
@@ -23,8 +28,12 @@ async function main() {
     console.log('--- Awareness sweep summary ---');
     console.log(`Deadlines due today: ${summary.deadlinesDue}`);
     console.log(`Reminders sent:      ${summary.remindersSent}`);
-    console.log(`Skipped (already notified / unreachable): ${summary.skipped}`);
+    console.log(`  via WhatsApp: ${summary.byChannel.WHATSAPP}`
+      + `  via SMS: ${summary.byChannel.SMS}`
+      + `  via voice call: ${summary.byChannel.VOICE}`);
+    console.log(`Skipped (already reached / still inside its window): ${summary.skipped}`);
     console.log(`Failed:              ${summary.failed}`);
+    console.log(`Unreached on every channel: ${summary.exhausted}`);
 
     for (const detail of summary.deadlines) {
       console.log(
