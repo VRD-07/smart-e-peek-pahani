@@ -17,6 +17,21 @@ const gatSchema = new mongoose.Schema({
   cropTypes: [{
     type: String,
   }],
+  // Total area of the parcel on the 7/12 record, in hectares.
+  //
+  // This is the figure the area overallocation check in
+  // services/validation/areaValidator.js sums crop entries against, so it is the
+  // registered area from the land record rather than anything measured off the
+  // boundary polygon — the polygon is a demo trace, and computing an area from it
+  // would quietly turn a survey document into a geometry estimate.
+  //
+  // Optional, because Gats seeded before Phase 7 do not carry it. Where it is
+  // absent the area check reports SKIPPED rather than PASS, so a Gat with no
+  // registered area never looks like one that passed the check.
+  registeredArea: {
+    type: Number,
+    min: 0,
+  },
   boundary: {
     type: {
       type: String,

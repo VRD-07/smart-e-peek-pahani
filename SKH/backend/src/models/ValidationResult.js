@@ -51,6 +51,31 @@ const validationResultSchema = new mongoose.Schema({
     timestamp: {
       status: { type: String, enum: ['PASS', 'FAIL', 'REVIEW'] },
     },
+    // Do the crop entries on this Gat still fit inside its registered area?
+    //
+    // SKIPPED is a real outcome here and not on the other checks: a submission
+    // filed before Phase 7, or one against a Gat with no registered area on
+    // record, has nothing to total. Recording that as SKIPPED rather than PASS
+    // keeps "we checked and it fits" distinguishable from "we never checked".
+    //
+    // There is no FAIL: an over-sum routes to review, never to rejection.
+    area: {
+      status: { type: String, enum: ['PASS', 'REVIEW', 'SKIPPED'] },
+      // Hectares claimed by this entry alone.
+      entryArea: Number,
+      // Hectares already claimed by other active entries on the same Gat, same
+      // season, same crop year.
+      otherActiveArea: Number,
+      // The Gat's total registered area, as it stood when the check ran. Stored
+      // because a later correction to the land record must not silently rewrite
+      // the basis of a decision already taken.
+      registeredArea: Number,
+      claimedTotal: Number,
+      remainingArea: Number,
+      // 'AREA_OVERALLOCATION'. A bare String for the same reason the location
+      // check's is: a code that outran the schema should not throw.
+      reasonCode: String,
+    },
   },
   reasons: [{
     type: String,

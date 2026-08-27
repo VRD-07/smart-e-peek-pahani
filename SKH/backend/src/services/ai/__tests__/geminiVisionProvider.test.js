@@ -51,12 +51,12 @@ describe('Gemini Vision Provider', () => {
 
   it('should return valid structured response with unsupported crop resulting in null', async () => {
     mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ detectedCrop: 'Wheat', confidence: 0.90 })
+      text: JSON.stringify({ detectedCrop: 'Dragonfruit', confidence: 0.90 })
     });
 
     const res = await provider.classify({ url: 'file:///tmp/test.jpg' });
 
-    // "Wheat" is not in the dictionary, so normalization returns null
+    // "Dragonfruit" is not in the dictionary, so normalization returns null
     expect(res.detectedCrop).toBeNull();
     expect(res.confidence).toBe(0.90);
   });

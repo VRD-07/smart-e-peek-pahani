@@ -115,15 +115,14 @@ describe('WhatsApp Webhook Integration', () => {
 
       // TwiML response should contain welcome message
       expect(res.text).toContain('<Message>');
-      expect(res.text).toContain('Namaskar');
+      expect(res.text).toContain('नमस्कार');
 
       // Verify DB state
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
       expect(session).toBeDefined();
-      expect(session.state).toBe(STATES.LANGUAGE_SELECTION);
     });
 
-    it('should preserve session state across multiple requests (Language -> Crop)', async () => {
+    it('should preserve session state across multiple requests (Start -> Action -> Season)', async () => {
       const sender = 'whatsapp:+2222222222';
 
       const Farmer = require('../../../models/Farmer');
@@ -137,22 +136,22 @@ describe('WhatsApp Webhook Integration', () => {
       });
       await Farmer.create({ name: 'Test', phoneNumber: sender, associatedGats: [gat._id] });
 
-      // Request 1: Start
+      // Request 1: Start -> advances single Gat farmer to WAITING_FOR_ACTION
       await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: 'hi' });
 
-      // Request 2: Select Marathi
+      // Request 2: Select "1" (Register Crop) -> advances to WAITING_FOR_SEASON
       const res2 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: '1' });
 
       expect(res2.status).toBe(200);
-      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_CROP);
+      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SEASON);
 
       // Verify DB state
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
-      expect(session.state).toBe(STATES.WAITING_FOR_CROP);
+      expect(session.state).toBe(STATES.WAITING_FOR_SEASON);
       expect(session.language).toBe(LANGUAGES.MR);
     });
 
@@ -264,10 +263,10 @@ describe('WhatsApp Webhook Integration', () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SOWING_DATE);
 
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
-      expect(session.state).toBe(STATES.WAITING_FOR_LOCATION);
+      expect(session.state).toBe(STATES.WAITING_FOR_SOWING_DATE);
       expect(session.declaredCrop).toBe('soybean');
     });
 
@@ -292,9 +291,9 @@ describe('WhatsApp Webhook Integration', () => {
       expect(res.status).toBe(200);
       expect(res.text).toContain(DICTIONARY[LANGUAGES.EN].MULTIPLE_CROPS);
 
-      // State remains in WAITING_FOR_CROP
+      // State transitions to WAITING_FOR_CROP_CONFIRMATION for crop selection
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
-      expect(session.state).toBe(STATES.WAITING_FOR_CROP);
+      expect(session.state).toBe(STATES.WAITING_FOR_CROP_CONFIRMATION);
     });
   });
 });

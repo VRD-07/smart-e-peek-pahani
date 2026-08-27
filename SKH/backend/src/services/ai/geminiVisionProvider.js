@@ -2,7 +2,15 @@ const fs = require('fs');
 const axios = require('axios');
 const VisionProvider = require('./visionProvider');
 const { normalizeCrop, validateConfidence } = require('./aiUtils');
+const { CANONICAL_CROPS } = require('../crops/cropCatalogue');
 const { GoogleGenAI } = require('@google/genai');
+
+// The list the model is allowed to answer with, built from the shared catalogue
+// rather than written out here. When vision and declaration lists are maintained
+// separately they drift, and the symptom is a crop mismatch nobody can explain:
+// the farmer declared a crop the catalogue knows and the model answered with a
+// name outside it, so normalizeCrop returned null and the check fell to REVIEW.
+const ALLOWED_CROPS = CANONICAL_CROPS.map((crop) => `"${crop}"`).join(', ');
 
 /**
  * Vision Provider implementation using Google's Gemini API.
@@ -56,9 +64,11 @@ class GeminiVisionProvider extends VisionProvider {
 
       const prompt = `Identify the agricultural crop in this image.
 Return only structured JSON with:
-detectedCrop: "soybean", "cotton", or null
+detectedCrop: exactly one of ${ALLOWED_CROPS}, or null
 confidence: number between 0 and 1
 
+Answer null rather than guessing when the crop is not one of those listed, or the
+image does not clearly show a crop.
 Do not invent crop names.
 Do not return explanations.`;
 
@@ -73,7 +83,7 @@ Do not return explanations.`;
               detectedCrop: {
                 type: "STRING",
                 nullable: true,
-                description: "Must be 'soybean', 'cotton', or null"
+                description: `Must be one of ${ALLOWED_CROPS}, or null`
               },
               confidence: {
                 type: "NUMBER"

@@ -60,8 +60,75 @@ const getFarmer = async (req, res) => {
   return successResponse(res, 'Farmer fetched successfully', farmer);
 };
 
+const FieldPlanting = require('../models/FieldPlanting');
+const Submission = require('../models/Submission');
+
+const createPlanting = async (req, res) => {
+  try {
+    const farmerId = req.user?.farmerId;
+    const { gatId, plantingType, count, approximateLocation } = req.body;
+
+    if (!farmerId) {
+      return errorResponse(res, 'Not authorized', 'UNAUTHORIZED', 401);
+    }
+    if (!gatId || !plantingType) {
+      return errorResponse(res, 'Missing gatId or plantingType', 'VALIDATION_ERROR', 400);
+    }
+
+    const planting = await FieldPlanting.create({
+      farmerId,
+      gatId,
+      plantingType,
+      count: count ? Number(count) : undefined,
+      approximateLocation,
+      source: 'WEB',
+    });
+
+    return successResponse(res, 'Planting registered successfully', planting, 201);
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getPlantings = async (req, res) => {
+  try {
+    const farmerId = req.user?.farmerId;
+    const { gatId } = req.query;
+
+    const query = { farmerId };
+    if (gatId) query.gatId = gatId;
+
+    const plantings = await FieldPlanting.find(query).sort({ createdAt: -1 });
+    return successResponse(res, 'Plantings fetched successfully', plantings);
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getGatHistory = async (req, res) => {
+  try {
+    const farmerId = req.user?.farmerId;
+    const { gatId } = req.params;
+
+    if (!farmerId) {
+      return errorResponse(res, 'Not authorized', 'UNAUTHORIZED', 401);
+    }
+
+    const submissions = await Submission.find({ farmerId, gatId })
+      .populate('validationResultId')
+      .sort({ createdAt: -1 });
+
+    return successResponse(res, 'Gat submission history fetched', submissions);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   createFarmer,
   getFarmer,
   getMe,
+  createPlanting,
+  getPlantings,
+  getGatHistory,
 };

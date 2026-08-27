@@ -22,8 +22,8 @@ describe('AI Utils', () => {
     });
 
     it('should return null for unsupported crops', () => {
-      expect(normalizeCrop('wheat')).toBeNull();
-      expect(normalizeCrop('sugarcane')).toBeNull();
+      expect(normalizeCrop('dragonfruit')).toBeNull();
+      expect(normalizeCrop('kiwi')).toBeNull();
     });
   });
 

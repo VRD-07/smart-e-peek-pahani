@@ -1,11 +1,19 @@
 const twilio = require('twilio');
 const { parseMessage } = require('../services/whatsapp/whatsappParser');
 const { processFlow } = require('../services/whatsapp/whatsappFlow');
+const { buildFlowContext } = require('../services/whatsapp/flowContext');
 
 const { processLocation } = require('../services/whatsapp/locationService');
 const { processMedia } = require('../services/whatsapp/mediaService');
 const { MESSAGE_TYPES, STATES } = require('../services/whatsapp/constants');
+const { AREA_REASON_CODES } = require('../services/validation/constants');
 const WhatsAppSession = require('../models/WhatsAppSession');
+
+// States where a text message is a crop name and should go through the matcher.
+// The confirmation state is included because a farmer who rejects all the offered
+// candidates by retyping the name is making a fresh attempt at it, not an invalid
+// menu selection.
+const CROP_INPUT_STATES = [STATES.WAITING_FOR_CROP, STATES.WAITING_FOR_CROP_CONFIRMATION];
 
 /**
  * Handles incoming Twilio webhooks.
@@ -34,14 +42,25 @@ async function handleWebhook(req, res) {
     const Farmer = require('../models/Farmer');
     const farmer = await Farmer.findOne({ phoneNumber: sender }).populate('associatedGats');
 
+    // 1.55 Adopt the farmer's stored language preference onto a fresh session.
+    //
+    // This is what replaces the language menu. A farmer who once said "English" is
+    // answered in English forever after, across sessions, without being asked
+    // again; a farmer we have never heard from gets Marathi, which the flow
+    // defaults to. Only applied when the session has no language of its own, so a
+    // mid-conversation switch is not undone on the next message.
+    if (!currentSession.language && farmer?.preferredLanguage) {
+      currentSession.language = farmer.preferredLanguage;
+    }
+
     // 1.6 One-time awareness intro for a number we have never heard from.
     // Deliberately not gated on the farmer existing: the people who lose out on
     // relief are the ones with no record at all, so an unregistered number gets
     // the explanation too. NotificationLog de-duplicates for the life of the
     // number, which is why this does not live on the 24h WhatsApp session.
     // Language: the farmer's own preference when we know it, otherwise the
-    // session's, otherwise Marathi — on a genuine first message the language
-    // menu has not been answered yet.
+    // session's, otherwise Marathi — which is also the bot's default, so a first
+    // message and the intro that answers it are in the same language.
     try {
       const { sendAwarenessIntro } = require('../services/notifications/awarenessService');
       const introLanguage = farmer?.preferredLanguage || currentSession.language || 'mr';
@@ -63,7 +82,7 @@ async function handleWebhook(req, res) {
       } else {
         parsedMessage.data = loc;
       }
-    } else if (parsedMessage.type === MESSAGE_TYPES.TEXT && currentSession.state === STATES.WAITING_FOR_CROP) {
+    } else if (parsedMessage.type === MESSAGE_TYPES.TEXT && CROP_INPUT_STATES.includes(currentSession.state)) {
       const { extractCrop } = require('../services/voice/cropExtraction');
       parsedMessage.data.extraction = extractCrop(parsedMessage.data.text);
     } else if (parsedMessage.type === MESSAGE_TYPES.IMAGE || parsedMessage.type === MESSAGE_TYPES.VOICE) {
@@ -131,7 +150,30 @@ async function handleWebhook(req, res) {
     }
 
     // 4. Process Flow
-    let { nextState, replyText, updatedSessionData } = processFlow(currentSession, parsedMessage, farmer);
+    //
+    // The state machine is pure, so the reads its prompts need — the parcel's
+    // registered area, the season's running total, the parcel's filing history —
+    // are fetched here and handed in. See services/whatsapp/flowContext.js.
+    const flowContext = await buildFlowContext(currentSession, farmer);
+    let {
+      nextState,
+      replyText,
+      updatedSessionData,
+      farmerUpdates,
+      sideEffect,
+    } = processFlow(currentSession, parsedMessage, farmer, flowContext);
+
+    // 4.5 A language switch is a preference, not a session detail. Persisting it on
+    // the Farmer is what lets the bot stop asking: the next conversation, months
+    // later on a new session, still opens in the language they chose.
+    if (farmerUpdates && farmer) {
+      try {
+        Object.assign(farmer, farmerUpdates);
+        await farmer.save();
+      } catch (error) {
+        console.error('[WhatsApp Controller] Could not persist farmer preference:', error.message);
+      }
+    }
 
     // 5. Save Session in MongoDB
     const previousState = currentSession.state;
@@ -139,10 +181,43 @@ async function handleWebhook(req, res) {
     currentSession.state = nextState;
     await currentSession.save();
 
+    // 5.5 Records the flow asked for that are not submissions.
+    //
+    // Only the boundary planting, which is informational and deliberately does not
+    // go through the validation gate — see models/FieldPlanting.js. A failure here
+    // is reported to the farmer rather than swallowed: they were told it was saved.
+    if (sideEffect && sideEffect.type === 'CREATE_PLANTING') {
+      const { getMessage } = require('../services/whatsapp/messages');
+      const language = currentSession.language || 'mr';
+
+      if (!farmer) {
+        replyText = getMessage('UNREGISTERED_FARMER', language);
+      } else {
+        try {
+          const FieldPlanting = require('../models/FieldPlanting');
+          await FieldPlanting.create({
+            farmerId: farmer._id,
+            gatId: sideEffect.data.gatId,
+            plantingType: sideEffect.data.plantingType,
+            approximateLocation: {
+              text: sideEffect.data.locationText,
+              latitude: sideEffect.data.location ? sideEffect.data.location.latitude : undefined,
+              longitude: sideEffect.data.location ? sideEffect.data.location.longitude : undefined,
+            },
+            source: 'WHATSAPP',
+            language,
+          });
+        } catch (error) {
+          console.error('[WhatsApp Controller] Error creating field planting:', error);
+          replyText = getMessage('ERROR', language);
+        }
+      }
+    }
+
     // 6. Generate Submission and Web Bridge if transitioning to READY_FOR_VALIDATION
     if (nextState === STATES.READY_FOR_VALIDATION && previousState !== STATES.READY_FOR_VALIDATION) {
       const { getMessage } = require('../services/whatsapp/messages');
-      const language = currentSession.language || 'en';
+      const language = currentSession.language || 'mr';
 
       if (!farmer) {
         replyText = getMessage('UNREGISTERED_FARMER', language);
@@ -155,9 +230,28 @@ async function handleWebhook(req, res) {
           farmerId: farmer._id,
           source: 'WHATSAPP',
           gatId: currentSession.selectedGatId,
+          // The survey answers collected before the photo step. Left undefined
+          // rather than defaulted when a field was never asked — the area check
+          // reports SKIPPED on a missing figure, and a default would turn that
+          // into a check that appears to have run.
+          season: currentSession.season || undefined,
+          cropYear: typeof currentSession.cropYear === 'number' ? currentSession.cropYear : undefined,
+          peekType: currentSession.peekType || undefined,
+          registeredArea: typeof currentSession.registeredArea === 'number'
+            ? currentSession.registeredArea
+            : undefined,
+          waterSource: currentSession.waterSource || undefined,
+          waterSourceOther: currentSession.waterSourceOther || undefined,
+          sowingDate: currentSession.sowingDate || undefined,
           crop: {
             declaredCrop: currentSession.declaredCrop,
-            language: language
+            language: language,
+            cropCategory: currentSession.cropCategory || undefined,
+            matchConfidence: typeof currentSession.matchConfidence === 'number'
+              ? currentSession.matchConfidence
+              : undefined,
+            matchMethod: currentSession.matchMethod || undefined,
+            declaredText: currentSession.declaredCropText || undefined,
           },
           location: {
             latitude: currentSession.location.latitude,
@@ -180,7 +274,20 @@ async function handleWebhook(req, res) {
 
           // Step 3 - Connect Submission to Validation internally
           const { validateSubmission } = require('../services/validation/validationService');
-          await validateSubmission(createdSubmission._id);
+          const validated = await validateSubmission(createdSubmission._id);
+
+          // The area overallocation outcome gets its own message. "Sent for
+          // review" on its own leaves a farmer with nothing to act on, and this is
+          // the one review reason they can actually check — the figures are on
+          // their own 7/12 record.
+          const areaCheck = validated?.validationResultId?.checks?.area;
+          if (areaCheck && areaCheck.reasonCode === AREA_REASON_CODES.AREA_OVERALLOCATION) {
+            const { formatHectares } = require('../services/survey/areaUnits');
+            replyText += `\n\n${getMessage('AREA_OVERALLOCATION_NOTICE', language, {
+              registered: formatHectares(areaCheck.registeredArea, language),
+              claimed: formatHectares(areaCheck.claimedTotal, language),
+            })}`;
+          }
         } catch (error) {
           if (error.code === 11000) {
             replyText = getMessage('ERROR', language); // or duplicate error msg if it existed

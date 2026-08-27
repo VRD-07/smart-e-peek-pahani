@@ -80,17 +80,17 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
   };
 
   describe('Speaking the crop instead of typing it', () => {
-    it('1. should accept a Marathi voice note and advance to the location step', async () => {
+    it('1. should accept a Marathi voice note and advance to the sowing date step', async () => {
       const sender = 'whatsapp:+919000000001';
       await startAtCropStep(sender, LANGUAGES.MR);
 
       const res = await postWebhook(voicePayload(sender, 'marathi_soybean'));
 
       expect(res.status).toBe(200);
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SOWING_DATE);
 
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
-      expect(session.state).toBe(STATES.WAITING_FOR_LOCATION);
+      expect(session.state).toBe(STATES.WAITING_FOR_SOWING_DATE);
       expect(session.declaredCrop).toBe('soybean');
     });
 
@@ -100,7 +100,7 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
 
       const res = await postWebhook(voicePayload(sender, 'hindi_cotton'));
 
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.HI].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.HI].ASK_SOWING_DATE);
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
       expect(session.declaredCrop).toBe('cotton');
     });
@@ -111,7 +111,7 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
 
       const res = await postWebhook(voicePayload(sender, 'english_cotton'));
 
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.EN].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.EN].ASK_SOWING_DATE);
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
       expect(session.declaredCrop).toBe('cotton');
     });
@@ -164,10 +164,10 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
       await postWebhook(voicePayload(sender, 'lowconf'));
       const res = await postWebhook({ From: sender, Body: 'सोयाबीन' });
 
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SOWING_DATE);
 
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
-      expect(session.state).toBe(STATES.WAITING_FOR_LOCATION);
+      expect(session.state).toBe(STATES.WAITING_FOR_SOWING_DATE);
       expect(session.declaredCrop).toBe('soybean');
     });
 
@@ -178,7 +178,7 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
       await postWebhook(voicePayload(sender, 'lowconf'));
       const res = await postWebhook(voicePayload(sender, 'marathi_cotton'));
 
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_LOCATION);
+      expect(res.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SOWING_DATE);
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
       expect(session.declaredCrop).toBe('cotton');
     });
@@ -254,7 +254,8 @@ describe('Marathi Voice-Assisted Crop Entry', () => {
 
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });
       expect(session.declaredCrop).toBeUndefined();
-      expect(session.state).toBe(STATES.WAITING_FOR_CROP);
+      const expectedState = scenario === 'english_multiple' ? STATES.WAITING_FOR_CROP_CONFIRMATION : STATES.WAITING_FOR_CROP;
+      expect(session.state).toBe(expectedState);
     });
   });
 

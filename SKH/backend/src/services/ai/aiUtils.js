@@ -1,4 +1,4 @@
-const { CROP_DICTIONARY } = require('../voice/cropExtraction');
+const { CROP_DICTIONARY } = require('../crops/cropCatalogue');
 
 /**
  * Normalizes an AI provider's crop output into the backend's canonical format.

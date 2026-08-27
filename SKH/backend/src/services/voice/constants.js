@@ -1,4 +1,4 @@
-const { CROP_DICTIONARY } = require('./cropExtraction');
+const { CANONICAL_CROPS } = require('../crops/cropCatalogue');
 
 // Kept here rather than on the providers so nothing has to import a provider
 // just to read a constant, mirroring services/notifications/constants.js and
@@ -33,14 +33,18 @@ const VOICE_FALLBACK_REASONS = {
   UNSUPPORTED_CROP: 'UNSUPPORTED_CROP',
   // More than one crop named; the record holds exactly one.
   MULTIPLE_CROPS_DETECTED: 'MULTIPLE_CROPS_DETECTED',
+  // Close to a crop name but not close enough to record without asking. Listed
+  // here so the voice path offers the same confirmation prompt the typed path
+  // does, instead of falling through to a flat "crop not supported".
+  LOW_MATCH_CONFIDENCE: 'LOW_MATCH_CONFIDENCE',
 };
 
 const VOICE_SUCCESS_REASON = 'SUCCESS';
 
-// The canonical crop list, derived from the same dictionary the text path and the
+// The canonical crop list, derived from the same catalogue the text path and the
 // vision layer use — one list, so voice can never accept a crop the rest of the
 // system does not recognise.
-const SUPPORTED_CROPS = [...new Set(Object.values(CROP_DICTIONARY))];
+const SUPPORTED_CROPS = [...CANONICAL_CROPS];
 
 function minConfidence() {
   const configured = Number.parseFloat(process.env.STT_MIN_CONFIDENCE);

@@ -30,6 +30,35 @@ const LOCATION_REASON_CODES = {
   NEAR_BOUNDARY: 'NEAR_BOUNDARY',
 };
 
+const AREA_REASON_CODES = {
+  // The crop entries claimed on this Gat for this season add up to more land than
+  // the Gat is registered as having.
+  AREA_OVERALLOCATION: 'AREA_OVERALLOCATION',
+};
+
+// Slack allowed on the area sum, in hectares.
+//
+// Areas arrive converted from गुंठे and एकर, so a farmer filing three entries that
+// exactly fill a parcel can land a rounding step or two above it. One square metre
+// is far below the precision of any figure on a land record and well above the
+// float error the conversions introduce, so it absorbs the arithmetic without
+// letting a real overclaim through.
+const AREA_TOLERANCE_HECTARES = 0.0001;
+
+// Which existing entries hold an area allocation against a Gat.
+//
+// REVIEW and PENDING_VALIDATION count. They are claimed, not approved, and an
+// unresolved claim still occupies the parcel — letting a farmer stack entries
+// behind one pending filing would defeat the check entirely. INVALID and DRAFT do
+// not count: a rejected filing claims nothing, and a draft has not been filed.
+const ACTIVE_ALLOCATION_STATUSES = [
+  'PENDING_VALIDATION',
+  'VALID',
+  'REVIEW',
+  'SYNC_PENDING',
+  'SYNCED',
+];
+
 /**
  * The configured review band in metres, before the parcel-size cap.
  * Out-of-range or unparseable values fall back to the default rather than
@@ -46,5 +75,8 @@ module.exports = {
   DEFAULT_NEAR_BOUNDARY_METERS,
   BOUNDARY_BUFFER_PARCEL_FRACTION,
   LOCATION_REASON_CODES,
+  AREA_REASON_CODES,
+  AREA_TOLERANCE_HECTARES,
+  ACTIVE_ALLOCATION_STATUSES,
   nearBoundaryThreshold,
 };

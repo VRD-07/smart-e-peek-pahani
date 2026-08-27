@@ -14,7 +14,21 @@ const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'status'];
 
 const createSubmission = async (req, res) => {
   try {
-    const { clientSubmissionId, source, gatId, crop, location, image } = req.body;
+    const {
+      clientSubmissionId,
+      source,
+      gatId,
+      crop,
+      location,
+      image,
+      season,
+      cropYear: userCropYear,
+      peekType,
+      registeredArea,
+      waterSource,
+      waterSourceOther,
+      sowingDate,
+    } = req.body;
 
     // 2. AUTHENTICATED FARMER ID (ignore req.body.farmerId)
     const farmerId = req.user?.farmerId;
@@ -43,6 +57,9 @@ const createSubmission = async (req, res) => {
       return errorResponse(res, 'Requested Gat does not match Farmer Gat', 'FARMER_GAT_MISMATCH', 403);
     }
 
+    const { cropYear: calcCropYear } = require('../services/survey/constants');
+    const calculatedCropYear = userCropYear || calcCropYear(sowingDate ? new Date(sowingDate) : new Date());
+
     // 5. SUBMISSION CREATION
     const submission = await Submission.create({
       clientSubmissionId,
@@ -52,6 +69,13 @@ const createSubmission = async (req, res) => {
       crop,
       location,
       image,
+      season,
+      cropYear: calculatedCropYear,
+      peekType,
+      registeredArea,
+      waterSource,
+      waterSourceOther,
+      sowingDate: sowingDate ? new Date(sowingDate) : undefined,
       status: 'PENDING_VALIDATION',
     });
 

@@ -2,6 +2,8 @@ const { validateIdentity, validateRequiredFields, validateTimestamp } = require(
 const { validateLocation } = require('./locationValidator');
 const { validateImage } = require('./imageValidator');
 const { validateCrop } = require('./cropValidator');
+const { validateArea } = require('./areaValidator');
+const { sumOtherActiveArea } = require('./areaAllocation');
 const { getVisionProvider } = require('../ai/visionFactory');
 const ValidationResult = require('../../models/ValidationResult');
 const Submission = require('../../models/Submission');
@@ -55,14 +57,50 @@ const runValidationEngine = async (submission, farmer, gat) => {
   // 9. Timestamp consistency
   const timestampCheck = validateTimestamp(submission.location?.receivedAt);
 
-  // 10. Final rule evaluation
+  // 10. Area allocation.
+  //
+  // Its own check, deliberately — not folded into the Gat or required-fields
+  // check. "The area you claimed does not fit in your parcel" is a different
+  // finding from "we cannot place you inside your parcel", it has its own reason
+  // code, and an officer needs to be able to tell them apart in the dashboard.
+  //
+  // A database failure here must not take the whole validation down: without this
+  // guard a slow query would turn every submission INVALID for a reason that has
+  // nothing to do with the filing.
+  let areaCheck = { status: 'SKIPPED', reason: 'Area check was not run' };
+  try {
+    const otherActiveArea = await sumOtherActiveArea({
+      gatId: submission.gatId,
+      season: submission.season,
+      cropYear: submission.cropYear,
+      excludeSubmissionId: submission._id,
+    });
+
+    areaCheck = validateArea({
+      entryArea: submission.registeredArea,
+      otherActiveArea,
+      registeredArea: gat?.registeredArea,
+    });
+  } catch (error) {
+    console.error('Area allocation lookup failed:', error);
+    areaCheck = {
+      status: 'REVIEW',
+      reasonCode: null,
+      reason: 'Could not total the existing crop entries for this Gat',
+    };
+  }
+
+  // 11. Final rule evaluation
   const mandatoryChecks = [
     identityCheck,
     requiredFieldsCheck,
     gatCheck,
     locationCheck,
     imageCheck,
-    timestampCheck
+    timestampCheck,
+    // Included so an area REVIEW routes the submission to review. It can never
+    // FAIL, so it cannot reject a filing on arithmetic alone.
+    areaCheck
   ];
 
   const failed = mandatoryChecks.some(check => check.status === 'FAIL') || cropCheck.status === 'FAIL';
@@ -76,8 +114,11 @@ const runValidationEngine = async (submission, farmer, gat) => {
 
   // Collect reasons
   const reasons = [];
-  [identityCheck, requiredFieldsCheck, gatCheck, locationCheck, imageCheck, cropCheck, timestampCheck].forEach(check => {
-    if (check.reason) reasons.push(check.reason);
+  [identityCheck, requiredFieldsCheck, gatCheck, locationCheck, imageCheck, cropCheck, timestampCheck, areaCheck].forEach(check => {
+    // A skipped check explains why it did not run. That is worth storing on the
+    // check itself, but it is not a reason for the outcome, so it stays out of
+    // the list an officer reads as "why this filing was flagged".
+    if (check.reason && check.status !== 'SKIPPED') reasons.push(check.reason);
   });
 
   const resultData = {
@@ -90,7 +131,8 @@ const runValidationEngine = async (submission, farmer, gat) => {
       gat: gatCheck,
       image: imageCheck,
       crop: cropCheck,
-      timestamp: timestampCheck
+      timestamp: timestampCheck,
+      area: areaCheck
     },
     reasons
   };

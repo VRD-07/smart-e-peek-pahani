@@ -26,7 +26,7 @@ describe('Crop Extraction Service', () => {
   });
 
   it('should reject unsupported crops gracefully', () => {
-    const result = extractCrop('I planted wheat and sugarcane');
+    const result = extractCrop('I planted dragonfruit');
     expect(result.declaredCrop).toBeNull();
     expect(result.reason).toBe('UNSUPPORTED_CROP');
   });
