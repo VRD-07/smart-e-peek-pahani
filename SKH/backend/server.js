@@ -25,9 +25,11 @@ if (process.env.NODE_ENV !== 'test') {
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false
+}));
 app.use(cors({
-  origin: env.frontendUrl,
+  origin: true,
   credentials: true,
 }));
 
