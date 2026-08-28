@@ -320,6 +320,8 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
   };
 }
 
+const { runEscalation, sendOnChannel } = require('../notifications/escalationService');
+
 /**
  * Trigger multi-channel escalation directly
  */
@@ -337,17 +339,26 @@ async function triggerEscalationDemo({
     SMS: 'ई-पीक पाहणी: मुदत संपत आहे. नोंदणी करा.'
   };
 
-  const result = await runEscalation({
-    phoneNumber,
+  const targetChannel = channel || 'SMS';
+
+  // Send directly on the requested fallback channel
+  const result = await sendOnChannel({
+    channel: targetChannel,
+    phoneNumber: phoneNumber || farmer.phoneNumber || '1234567890',
     farmerId: farmer._id,
     type,
     dedupeKey,
     language,
-    bodies,
-    force: true
-  }, { upToChannel: channel });
+    body: bodies[targetChannel] || bodies.SMS
+  });
 
-  return result;
+  return {
+    action: result.status,
+    channel: targetChannel,
+    recipient: phoneNumber,
+    log: result.log,
+    reason: result.reason
+  };
 }
 
 /**

@@ -34,6 +34,8 @@ export const DemoControlPanel = () => {
     coordinatesText: '19.9010, 74.4940\n19.9030, 74.4940\n19.9030, 74.4965\n19.9010, 74.4965'
   });
 
+  const [recipientPhone, setRecipientPhone] = useState('1234567890');
+
   const appendLog = (title, data) => {
     setLogOutput({
       title,
@@ -86,8 +88,11 @@ export const DemoControlPanel = () => {
   const handleTriggerEscalation = async (channel) => {
     setLoadingAction(`escalate-${channel}`);
     try {
-      const res = await api.post('/demo/trigger-escalation', { channel });
-      appendLog(`📢 Escalation Triggered: ${channel}`, res.data.data);
+      const res = await api.post('/demo/trigger-escalation', {
+        channel,
+        phoneNumber: recipientPhone
+      });
+      appendLog(`📢 Escalation Triggered: ${channel} (to ${recipientPhone})`, res.data.data);
     } catch (err) {
       appendLog(`❌ Escalation Failed: ${channel}`, err.response?.data || err.message);
     } finally {
@@ -409,6 +414,19 @@ export const DemoControlPanel = () => {
                   Manually invoke Phase 6 escalation rungs bypassing the 24h/48h elapsed time window.
                 </p>
                 <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-400 mb-1">
+                      Recipient Mobile Number (e.g. +91XXXXXXXXXX)
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      placeholder="+919876543210"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
                   <button
                     onClick={() => handleTriggerEscalation('SMS')}
                     disabled={loadingAction === 'escalate-SMS'}
