@@ -91,6 +91,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 const demoRoutes = require('./src/routes/demoRoutes');
 app.use('/api/demo', demoRoutes);
+app.use('/demo', demoRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

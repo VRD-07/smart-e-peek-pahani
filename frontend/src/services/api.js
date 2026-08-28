@@ -6,8 +6,14 @@ if (!import.meta.env.VITE_API_URL) {
   console.warn('VITE_API_URL is missing. Please create a .env file.');
 }
 
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const trimmed = envUrl.trim().replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: getBaseUrl(),
   timeout: 10000,
 });
 
