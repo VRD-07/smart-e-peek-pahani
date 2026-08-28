@@ -67,7 +67,7 @@ app.use(
 );
 
 // Health check endpoints
-app.get(['/', '/health', '/api/health'], (req, res) => {
+app.get(['/', '/health', '/api', '/api/health'], (req, res) => {
   res.json({
     success: true,
     message: 'Smart E-Peek backend is running'
