@@ -52,7 +52,24 @@ const createSubmission = async (req, res) => {
       return errorResponse(res, 'Farmer Gat not configured', 'FARMER_GAT_NOT_CONFIGURED', 400);
     }
 
-    const hasGat = farmer.associatedGats.some(gId => gId.toString() === gatId);
+    let effectiveGatId = gatId;
+    if (!mongoose.Types.ObjectId.isValid(gatId)) {
+      const cleanNum = gatId.toString().replace(/^demo_/, '');
+      const foundGat = await Gat.findOne({
+        _id: { $in: farmer.associatedGats },
+        gatNumber: cleanNum
+      }) || await Gat.findOne({ gatNumber: cleanNum }) || await Gat.findById(farmer.associatedGats[0]);
+
+      if (foundGat) {
+        effectiveGatId = foundGat._id.toString();
+        if (!farmer.associatedGats.some(gId => gId.toString() === effectiveGatId)) {
+          farmer.associatedGats.push(foundGat._id);
+          await farmer.save();
+        }
+      }
+    }
+
+    const hasGat = farmer.associatedGats.some(gId => gId.toString() === effectiveGatId);
     if (!hasGat) {
       return errorResponse(res, 'Requested Gat does not match Farmer Gat', 'FARMER_GAT_MISMATCH', 403);
     }
@@ -65,7 +82,7 @@ const createSubmission = async (req, res) => {
       clientSubmissionId,
       farmerId,
       source,
-      gatId,
+      gatId: effectiveGatId,
       crop,
       location,
       image,

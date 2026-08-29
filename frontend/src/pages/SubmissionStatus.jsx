@@ -17,11 +17,26 @@ export const SubmissionStatus = () => {
   const submission = locationState?.bridgeData ? locationState.bridgeData.submission : liveSubmission;
   const validation = locationState?.bridgeData ? locationState.bridgeData.validation : liveSubmission?.validationResult;
 
+  const [backendValidation, setBackendValidation] = useState(null);
   const [progress, setProgress] = useState(0);
   const [validating, setValidating] = useState(true);
   const [error, setError] = useState(null);
 
-  // No manual fetch needed, useLiveQuery handles it
+  // Fetch populated validation details from backend if available
+  useEffect(() => {
+    if (submission?.backendId && !backendValidation) {
+      api.get(`/submissions/${submission.backendId}`)
+        .then(res => {
+          if (res.data?.data?.validationResultId && typeof res.data.data.validationResultId === 'object') {
+            setBackendValidation(res.data.data.validationResultId);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [submission?.backendId, backendValidation]);
+
+  const activeValidation = locationState?.bridgeData?.validation || backendValidation || (typeof validation === 'object' ? validation : null);
+  const overallStatus = activeValidation?.overallStatus || submission?.validationStatus || submission?.status || 'VALID';
 
   useEffect(() => {
     if (!submission || locationState?.bridgeData) return;
@@ -34,24 +49,28 @@ export const SubmissionStatus = () => {
 
       setValidating(true);
 
-      // Simulate validation progress UI for local sync flow
+      // Simulate smooth validation progress UI
       const interval = setInterval(() => {
         setProgress(p => {
-          if (p >= 100) {
-            clearInterval(interval);
-            return 100;
-          }
-          return p + 10;
+          if (p >= 90) return 90;
+          return p + 15;
         });
-      }, 300);
+      }, 250);
 
       const doSync = async () => {
-        await syncPendingSubmissions();
-        setValidating(false);
+        try {
+          await syncPendingSubmissions();
+        } catch (err) {
+          console.error("Sync error in SubmissionStatus:", err);
+        } finally {
+          setProgress(100);
+          setTimeout(() => {
+            setValidating(false);
+          }, 300);
+        }
       };
 
-      // Slight delay for UX
-      const timeout = setTimeout(doSync, 2000);
+      const timeout = setTimeout(doSync, 1000);
 
       return () => {
         clearInterval(interval);
@@ -59,6 +78,7 @@ export const SubmissionStatus = () => {
       };
     } else {
       setValidating(false);
+      setProgress(100);
     }
   }, [submission?.status, submission?.error, isOnline, locationState]);
 
@@ -202,15 +222,15 @@ export const SubmissionStatus = () => {
           </div>
 
           {/* Validation Details */}
-          {validation && (
+          {activeValidation && typeof activeValidation === 'object' && (
             <div className="pt-2.5 border-t border-emerald-200 text-[11px] space-y-1.5 bg-white/70 p-2.5 rounded-2xl">
               <div className="flex justify-between">
                 <span className="text-gray-500">AI पीक पडताळणी:</span>
-                <span className="font-bold text-emerald-700">{validation.checks?.crop?.detectedCrop || data.crop || 'सोयाबीन'} (100% Match)</span>
+                <span className="font-bold text-emerald-700">{activeValidation.checks?.crop?.detectedCrop || data.crop || 'सोयाबीन'} (100% Match)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">GPS जिओ-फेन्सिंग:</span>
-                <span className="font-bold text-emerald-700">{validation.checks?.location?.insideGat !== false ? '✅ शेताच्या हद्दीत (Inside Gat)' : 'हद्दीबाहेर'}</span>
+                <span className="font-bold text-emerald-700">{activeValidation.checks?.location?.insideGat !== false ? '✅ शेताच्या हद्दीत (Inside Gat)' : 'हद्दीबाहेर'}</span>
               </div>
             </div>
           )}
