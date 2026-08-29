@@ -24,6 +24,9 @@ if (process.env.NODE_ENV !== 'test') {
 
 const app = express();
 
+// Trust reverse proxy headers on Render/cloud hosts for rate limiting
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet({
   crossOriginResourcePolicy: false
