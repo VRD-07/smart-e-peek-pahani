@@ -130,15 +130,44 @@ describe('Phase 8 — Demo Control Panel Integration Tests', () => {
     });
   });
 
-  describe('3. Multi-Channel Escalation Trigger', () => {
-    it('should trigger notification escalation up to SMS/Voice', async () => {
+  describe('3. Multi-Channel Triggers (Channel-Specific Dispatch)', () => {
+    it('should trigger WHATSAPP notification only when WHATSAPP is requested', async () => {
+      const res = await request(app)
+        .post('/api/demo/trigger-escalation')
+        .send({ channel: 'WHATSAPP' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.channel).toBe('WHATSAPP');
+      expect(res.body.data.channelsAttempted).toEqual(['WHATSAPP']);
+      expect(res.body.data.steps).toHaveLength(1);
+      expect(res.body.data.steps[0].channel).toBe('WHATSAPP');
+    });
+
+    it('should trigger SMS notification only when SMS is requested', async () => {
       const res = await request(app)
         .post('/api/demo/trigger-escalation')
         .send({ channel: 'SMS' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.steps).toBeDefined();
+      expect(res.body.data.channel).toBe('SMS');
+      expect(res.body.data.channelsAttempted).toEqual(['SMS']);
+      expect(res.body.data.steps).toHaveLength(1);
+      expect(res.body.data.steps[0].channel).toBe('SMS');
+    });
+
+    it('should trigger VOICE call only when VOICE is requested', async () => {
+      const res = await request(app)
+        .post('/api/demo/trigger-escalation')
+        .send({ channel: 'VOICE' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.channel).toBe('VOICE');
+      expect(res.body.data.channelsAttempted).toEqual(['VOICE']);
+      expect(res.body.data.steps).toHaveLength(1);
+      expect(res.body.data.steps[0].channel).toBe('VOICE');
     });
   });
 

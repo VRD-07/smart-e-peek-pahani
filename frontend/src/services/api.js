@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { OFFICER_STORAGE_KEY } from '../pages/OfficerDashboard/statusMeta';
 
 // Required environment variable during local development:
 // VITE_API_URL=http://localhost:5000/api
@@ -38,6 +39,7 @@ api.interceptors.response.use(
         // Do not redirect if the request was to the bridge token verification endpoint
         if (!error.config.url.includes('/bridge/verify')) {
           localStorage.removeItem('smart_e_peek_token');
+          localStorage.removeItem(OFFICER_STORAGE_KEY);
 
           // Officers sign in through a separate route from farmers
           const loginPath = window.location.pathname.startsWith('/officer')

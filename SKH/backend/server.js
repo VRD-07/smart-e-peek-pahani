@@ -32,20 +32,29 @@ app.use(helmet({
   crossOriginResourcePolicy: false
 }));
 app.use(cors({
-  origin: true,
+  // In production, restrict to the configured frontend origin. During
+  // development, allow any origin so local setups work out of the box.
+  origin: env.nodeEnv === 'production' ? env.frontendUrl : true,
   credentials: true,
 }));
 
-// We need raw body for Twilio signature validation if it was real,
-// but for standard json we use express.json
-// To support urlencoded for Twilio
+// Standard JSON parser for API endpoints.
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// URL-encoded parser for Twilio webhooks. The `verify` callback preserves the
+// raw body so that validateTwilio middleware can reconstruct the Twilio request
+// signature when real validation is enabled in production.
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString();
+  },
+}));
 
-// Rate limiting
+// Rate limiting — values configurable via env for production tuning.
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: env.rateLimitWindowMs,
+  max: env.rateLimitMax,
 });
 app.use('/api', limiter);
 
@@ -69,7 +78,13 @@ app.use(
   })
 );
 
-// Health check endpoints
+const { handleCheckSystemHealth } = require('./src/controllers/demoController');
+const { startBackupJob } = require('./src/jobs/backupJob');
+
+// System Integrity Health check endpoints
+app.get(['/system_health', '/api/system_health', '/system-health', '/api/system-health'], handleCheckSystemHealth);
+
+// Basic liveness check endpoints
 app.get(['/', '/health', '/api', '/api/health'], (req, res) => {
   res.json({
     success: true,
@@ -110,6 +125,9 @@ if (process.env.NODE_ENV !== 'test') {
   // open timer; run it manually with `node scripts/runAwarenessReminders.js`.
   const { startAwarenessJob } = require('./src/jobs/awarenessJob');
   startAwarenessJob();
+
+  // Periodic database snapshot backup job for blackout resilience.
+  startBackupJob();
 }
 
 module.exports = app;

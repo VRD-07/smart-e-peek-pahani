@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShieldAlert,
@@ -16,7 +16,13 @@ import {
   PlusCircle,
   ExternalLink,
   RefreshCw,
-  Send
+  Send,
+  Database,
+  AlertOctagon,
+  RotateCcw,
+  Activity,
+  HardDrive,
+  Camera
 } from 'lucide-react';
 import api from '../services/api';
 import { db } from '../storage/db';
@@ -25,9 +31,27 @@ export const DemoControlPanel = () => {
   const [loadingAction, setLoadingAction] = useState(null);
   const [logOutput, setLogOutput] = useState(null);
   const [offlineCount, setOfflineCount] = useState(0);
+  const [systemHealth, setSystemHealth] = useState(null);
 
   // Custom phone number for live demonstration to judges
   const [targetPhone, setTargetPhone] = useState('+91');
+
+  useEffect(() => {
+    // Check initial health and offline queue count on mount
+    const init = async () => {
+      try {
+        const count = await db.submissions.where('status').equals('SYNC_PENDING').count();
+        setOfflineCount(count);
+        const healthRes = await api.get('/demo/health');
+        setSystemHealth(healthRes.data);
+      } catch (err) {
+        if (err.response?.data) {
+          setSystemHealth(err.response.data);
+        }
+      }
+    };
+    init();
+  }, []);
 
   // Gat seeding state with Murshatpur default
   const [gatForm, setGatForm] = useState({
@@ -99,6 +123,30 @@ export const DemoControlPanel = () => {
       };
     }
 
+    // Generic fallback for any dispatch failure not matched above
+    if (data.success === false || data.exhausted || data.status === 'FAILED' || data.status === 'SKIPPED') {
+      const providerError = data.steps?.[0]?.error || data.details?.error || data.error || '';
+      const reason = data.steps?.[0]?.reason || data.message || 'Provider returned an error';
+      return {
+        severity: 'error',
+        badge: `${data.channel || 'Channel'} Dispatch Failed`,
+        title: reason,
+        cause: providerError || `Channel ${data.channel} could not deliver the notification.`,
+        solution: 'Check backend logs and Twilio console for details. Verify the phone number format (+91...), provider configuration in .env, and that the channel sender number is set.'
+      };
+    }
+
+    // Surface backend error responses (errorCode present in error responses from the API)
+    if (data.errorCode || data.error) {
+      return {
+        severity: 'error',
+        badge: data.errorCode || 'Server Error',
+        title: data.message || 'Request failed',
+        cause: data.error || data.message || 'The backend returned an error for this request.',
+        solution: 'Check the backend server console for full error details.'
+      };
+    }
+
     return null;
   };
 
@@ -162,12 +210,18 @@ export const DemoControlPanel = () => {
       }
       const res = await api.post('/demo/trigger-escalation', payload);
       const isSuccess = res.data?.data?.success ?? (res.data?.data?.status === 'SENT');
+      const channelLabels = {
+        WHATSAPP: 'WhatsApp Message',
+        SMS: 'SMS Text Message',
+        VOICE: 'Phone Call (Voice IVR)'
+      };
+      const label = channelLabels[channel] || channel;
       const title = isSuccess
-        ? `✅ Live Dispatch Sent: ${channel}`
-        : `❌ Live Dispatch Failed: ${channel}`;
+        ? `✅ Live Dispatch Sent: ${label}`
+        : `❌ Live Dispatch Failed: ${label}`;
       appendLog(title, res.data.data, isSuccess ? 'success' : 'error');
     } catch (err) {
-      appendLog(`❌ Escalation Request Failed: ${channel}`, err.response?.data || err.message, 'error');
+      appendLog(`❌ Dispatch Request Failed: ${channel}`, err.response?.data || err.message, 'error');
     } finally {
       setLoadingAction(null);
     }
@@ -220,6 +274,131 @@ export const DemoControlPanel = () => {
     }
   };
 
+  const handleSimulateBlackout = async () => {
+    setLoadingAction('blackout');
+    try {
+      const res = await api.post('/demo/blackout');
+      appendLog('🚨 SIMULATED DATABASE BLACKOUT TRIGGERED', res.data.data, 'error');
+      await handleCheckHealth(false);
+    } catch (err) {
+      appendLog('❌ Blackout Simulation Request Failed', err.response?.data || err.message, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleCheckHealth = async (showLog = true) => {
+    setLoadingAction('health');
+    try {
+      const res = await api.get('/demo/health');
+      setSystemHealth(res.data);
+      if (showLog) {
+        appendLog(
+          res.data.healthy ? '✅ System Integrity: HEALTHY' : '🚨 System Integrity: CORRUPTED',
+          res.data,
+          res.data.healthy ? 'success' : 'error'
+        );
+      }
+    } catch (err) {
+      const data = err.response?.data || { status: 'corrupted', healthy: false, reason: err.message };
+      setSystemHealth(data);
+      if (showLog) {
+        appendLog('🚨 System Integrity Check: CORRUPTED / UNHEALTHY', data, 'error');
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleRestoreSnapshot = async () => {
+    setLoadingAction('restore');
+    try {
+      const res = await api.post('/demo/restore');
+      appendLog('♻️ Database Restored from Snapshot', res.data.data, 'success');
+      await handleCheckHealth(false);
+    } catch (err) {
+      appendLog('❌ Database Restore Failed', err.response?.data || err.message, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleCreateSnapshot = async () => {
+    setLoadingAction('snapshot');
+    try {
+      const res = await api.post('/demo/snapshot');
+      appendLog('📸 Snapshot Created', res.data.data, 'success');
+      await handleCheckHealth(false);
+    } catch (err) {
+      appendLog('❌ Snapshot Creation Failed', err.response?.data || err.message, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleReplayInFlight = async () => {
+    setLoadingAction('replay-inflight');
+    try {
+      // 1. Create a simulated in-flight submission in Dexie IDB with SYNC_PENDING
+      const inFlightItem = {
+        status: 'SYNC_PENDING',
+        data: {
+          clientSubmissionId: `inflight_wa_${Date.now()}`,
+          name: 'In-Flight Demo Farmer (Murshatpur)',
+          mobile: targetPhone && targetPhone.length > 5 ? targetPhone : '+919876543210',
+          village: 'Murshatpur',
+          gat: '101',
+          crop: 'soybean',
+          registeredArea: 2.1,
+          season: 'KHARIF',
+          location: { latitude: 19.9020, longitude: 74.4950, isValid: true, status: 'VALID' },
+          photo: 'https://res.cloudinary.com/mock-cloud/image/upload/v12345/crop_sample.jpg'
+        },
+        timestamp: Date.now()
+      };
+      const id = await db.submissions.add(inFlightItem);
+      const count = await db.submissions.where('status').equals('SYNC_PENDING').count();
+      setOfflineCount(count);
+
+      appendLog('⏳ In-Flight Submission Queued in Dexie IDB', {
+        localQueueId: id,
+        status: 'SYNC_PENDING',
+        message: 'Buffered in durable client-side IndexedDB during blackout. Ready to replay to restored backend.'
+      }, 'info');
+
+      // 2. Perform sync replay to backend
+      const subRes = await api.post('/demo/trigger-submission', {
+        scenario: 'VALID',
+        crop: 'soybean',
+        area: 2.1
+      });
+
+      // 3. Mark as SYNCED in Dexie IDB
+      await db.submissions.update(id, {
+        status: 'SYNCED',
+        backendId: subRes.data?.data?.submission?._id,
+        syncedAt: new Date().toISOString()
+      });
+
+      const updatedCount = await db.submissions.where('status').equals('SYNC_PENDING').count();
+      setOfflineCount(updatedCount);
+
+      appendLog('✅ In-Flight Submission Replayed & Landed in DB', {
+        localQueueId: id,
+        replayedStatus: 'SYNCED',
+        submissionId: subRes.data?.data?.submission?._id,
+        backendStatus: subRes.data?.data?.submission?.status || 'VALID',
+        message: 'In-flight submission successfully recovered from Dexie queue into restored database!'
+      }, 'success');
+
+      await handleCheckHealth(false);
+    } catch (err) {
+      appendLog('❌ In-Flight Replay Failed', err.response?.data || err.message, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   const handleChaos = async () => {
     setLoadingAction('chaos');
     try {
@@ -248,7 +427,7 @@ export const DemoControlPanel = () => {
                 Smart E-Peek Pahani Pipeline & Channel Controller
               </h1>
               <p className="text-slate-400 text-xs md:text-sm mt-1 max-w-3xl">
-                Execute live validation pipelines, test AI crop vision, trigger automated multi-channel escalation (WhatsApp → SMS → Phone Call) directly to your phone before judges, and simulate offline field capture.
+                Execute live validation pipelines, test AI crop vision, trigger automated multi-channel dispatches (WhatsApp, SMS message, Phone Voice Call) directly to your phone before judges, and simulate offline field capture.
               </p>
             </div>
 
@@ -270,6 +449,41 @@ export const DemoControlPanel = () => {
           </div>
         </div>
 
+        {/* System Health Alert Banner (Appears when corrupted or warning) */}
+        {systemHealth && !systemHealth.healthy && (
+          <div className="bg-red-950/80 border-2 border-red-500 rounded-2xl p-5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-900/60 rounded-xl border border-red-500 text-red-300">
+                <AlertOctagon className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider bg-red-900 text-red-200 border border-red-700 px-2 py-0.5 rounded">
+                    CRITICAL SYSTEM CORRUPTION DETECTED
+                  </span>
+                  <span className="text-xs font-mono text-red-300">
+                    {systemHealth.detectedAt ? new Date(systemHealth.detectedAt).toLocaleTimeString() : 'Just now'}
+                  </span>
+                </div>
+                <h2 className="text-lg font-black text-white mt-0.5">Database Blackout / Data Loss Active</h2>
+                <p className="text-xs text-red-200 mt-0.5">
+                  {systemHealth.reason || 'Submissions collection dropped or corrupted. Use "Restore from Snapshot" below to recover database.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleRestoreSnapshot}
+                disabled={loadingAction === 'restore'}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition-all"
+              >
+                {loadingAction === 'restore' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Quick Restore from Snapshot
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Live Phone Recipient Target */}
         <div className="bg-gradient-to-r from-emerald-950/40 via-slate-800/80 to-slate-800/80 border border-emerald-500/30 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="space-y-1">
@@ -278,7 +492,7 @@ export const DemoControlPanel = () => {
               Live Phone Target for In-Person Judge Demo
             </div>
             <p className="text-slate-400 text-xs">
-              Enter your mobile number with country code (e.g. <span className="text-emerald-300 font-mono">+919876543210</span>) to receive real-time WhatsApp alerts, SMS reminders, and IVR Phone Calls on stage.
+              Enter your mobile number with country code (e.g. <span className="text-emerald-300 font-mono">+919876543210</span>) to receive real-time WhatsApp alerts, SMS messages, and IVR Phone Calls on stage.
             </p>
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto">
@@ -297,19 +511,19 @@ export const DemoControlPanel = () => {
           {/* Column 1 & 2: Controls */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Section 1: Multi-Channel Escalation Trigger to Live Phone */}
+            {/* Section 1: Multi-Channel Triggers to Live Phone */}
             <div className="bg-slate-800/60 border border-purple-500/30 rounded-2xl p-5 shadow-lg space-y-4">
               <div className="flex items-center justify-between border-b border-slate-700 pb-3">
                 <div className="flex items-center gap-2">
                   <PhoneCall className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-base font-bold text-white">1. Multi-Channel Triggers (Ring Handset Live)</h2>
+                  <h2 className="text-base font-bold text-white">1. Multi-Channel Triggers (Direct Channel Dispatch)</h2>
                 </div>
                 <span className="text-[11px] bg-purple-950 text-purple-300 border border-purple-800 px-2.5 py-0.5 rounded-full font-mono">
-                  WhatsApp → SMS → Voice
+                  WhatsApp • SMS • Voice Call
                 </span>
               </div>
               <p className="text-slate-400 text-xs">
-                Demonstrate the zero-friction safety net. If an illiterate or offline farmer doesn't file before the deadline, the system automatically descends the escalation ladder.
+                Demonstrate multi-channel reachability. Each trigger strictly and independently dispatches directly to that specific channel (WhatsApp calls WhatsApp only, SMS sends text message only, and Phone Call places a voice call only).
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -323,9 +537,12 @@ export const DemoControlPanel = () => {
                       <Send className="w-4 h-4 text-emerald-400" />
                       1. WhatsApp Alert
                     </span>
+                    <span className="text-[9px] bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 px-1.5 py-0.5 rounded font-mono">
+                      WhatsApp Only
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Sends interactive Marathi WhatsApp survey reminder to recipient.
+                    Sends interactive Marathi WhatsApp reminder directly to recipient handset only.
                   </p>
                 </button>
 
@@ -337,11 +554,14 @@ export const DemoControlPanel = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-bold text-xs text-white group-hover:text-purple-300 flex items-center gap-1.5">
                       <MessageSquare className="w-4 h-4 text-purple-400" />
-                      2. SMS Fallback
+                      2. SMS Message
+                    </span>
+                    <span className="text-[9px] bg-purple-900/60 text-purple-300 border border-purple-700/50 px-1.5 py-0.5 rounded font-mono">
+                      SMS Only
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Dispatches compact Devanagari SMS reminder for feature phones.
+                    Dispatches compact Devanagari text SMS directly to feature phone or handset only.
                   </p>
                 </button>
 
@@ -353,11 +573,14 @@ export const DemoControlPanel = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-bold text-xs text-white group-hover:text-indigo-300 flex items-center gap-1.5">
                       <PhoneCall className="w-4 h-4 text-indigo-400" />
-                      3. Live Phone Call
+                      3. Phone Calling (Voice Call)
+                    </span>
+                    <span className="text-[9px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded font-mono">
+                      Phone Call Only
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Places automated IVR phone call to handset playing clear voice message.
+                    Places automated IVR voice call to handset playing clear spoken Marathi audio only.
                   </p>
                 </button>
               </div>
@@ -578,7 +801,159 @@ export const DemoControlPanel = () => {
 
             </div>
 
-            {/* Section 4: Chaos Mode */}
+            {/* Section 4: Blackout Resilience & Database Disaster Recovery */}
+            <div className="bg-slate-800/80 border border-red-500/40 rounded-2xl p-5 shadow-2xl space-y-4 relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-red-400" />
+                  <div>
+                    <h2 className="text-base font-bold text-white flex items-center gap-2">
+                      4. Blackout Resilience & Disaster Recovery
+                    </h2>
+                    <span className="text-[11px] text-slate-400">
+                      Live simulated database wipe, corruption health check, snapshot restoration & in-flight Dexie recovery.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-1.5 border ${
+                    systemHealth?.healthy
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-700 shadow-sm shadow-emerald-900/50'
+                      : 'bg-red-950 text-red-300 border-red-700 animate-pulse'
+                  }`}>
+                    {systemHealth?.healthy ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        HEALTHY
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+                        CORRUPTED
+                      </>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleCreateSnapshot}
+                    disabled={loadingAction === 'snapshot'}
+                    title="Capture immediate database JSON snapshot"
+                    className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs flex items-center gap-1 border border-slate-600 transition-all"
+                  >
+                    {loadingAction === 'snapshot' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                    <span className="text-[10px]">Take Snapshot</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status summary bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 font-mono">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">SUBMISSIONS:</span>
+                  <span className="text-white font-bold">{systemHealth?.details?.submissionsCount ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">FARMERS / GATS:</span>
+                  <span className="text-slate-300">{systemHealth?.details?.farmersCount ?? '—'} / {systemHealth?.details?.gatsCount ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">SNAPSHOTS:</span>
+                  <span className="text-cyan-300">{systemHealth?.details?.availableSnapshotsCount ?? 0} retained</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">AUTO-BACKUP:</span>
+                  <span className="text-emerald-400">Every 2 min</span>
+                </div>
+              </div>
+
+              {/* The 4 Action Buttons for Judges Demo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                
+                {/* 1. Simulate Blackout */}
+                <button
+                  onClick={handleSimulateBlackout}
+                  disabled={loadingAction === 'blackout'}
+                  className="p-3.5 bg-red-950/40 hover:bg-red-900/60 border-2 border-red-600/60 hover:border-red-500 rounded-xl text-left transition-all group shadow-lg"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-red-300 flex items-center gap-1.5">
+                      <AlertOctagon className="w-4 h-4 text-red-400" />
+                      1. Simulate Blackout
+                    </span>
+                    <span className="text-[9px] bg-red-900/80 text-red-200 border border-red-700 px-1.5 py-0.5 rounded font-mono">
+                      Wipe Submissions
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Deliberately drops Submissions collection & sets system integrity flag to CORRUPTED.
+                  </p>
+                </button>
+
+                {/* 2. Check System Health */}
+                <button
+                  onClick={() => handleCheckHealth(true)}
+                  disabled={loadingAction === 'health'}
+                  className="p-3.5 bg-slate-900/80 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 rounded-xl text-left transition-all group shadow-lg"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-cyan-300 flex items-center gap-1.5">
+                      <Activity className="w-4 h-4 text-cyan-400" />
+                      2. Check System Health
+                    </span>
+                    <span className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded font-mono">
+                      /system_health
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Verifies DB integrity, record counts, and reports corrupted vs healthy state.
+                  </p>
+                </button>
+
+                {/* 3. Restore from Snapshot */}
+                <button
+                  onClick={handleRestoreSnapshot}
+                  disabled={loadingAction === 'restore'}
+                  className="p-3.5 bg-emerald-950/40 hover:bg-emerald-900/60 border-2 border-emerald-600/60 hover:border-emerald-500 rounded-xl text-left transition-all group shadow-lg"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-emerald-300 flex items-center gap-1.5">
+                      <RotateCcw className="w-4 h-4 text-emerald-400" />
+                      3. Restore from Snapshot
+                    </span>
+                    <span className="text-[9px] bg-emerald-900/80 text-emerald-200 border border-emerald-700 px-1.5 py-0.5 rounded font-mono">
+                      Rollback Recovery
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Restores database from most recent snapshot; health check automatically returns to Healthy.
+                  </p>
+                </button>
+
+                {/* 4. Replay In-Flight Submission */}
+                <button
+                  onClick={handleReplayInFlight}
+                  disabled={loadingAction === 'replay-inflight'}
+                  className="p-3.5 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/50 hover:border-sky-400 rounded-xl text-left transition-all group shadow-lg"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-sky-300 flex items-center gap-1.5">
+                      <HardDrive className="w-4 h-4 text-sky-400" />
+                      4. Replay In-Flight Submission
+                    </span>
+                    <span className="text-[9px] bg-sky-900/80 text-sky-200 border border-sky-700 px-1.5 py-0.5 rounded font-mono">
+                      Dexie IDB Buffer
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Simulates submission queued in IndexedDB right before wipe, syncing it to DB post-restore.
+                  </p>
+                </button>
+
+              </div>
+            </div>
+
+            {/* Section 5: Chaos Mode */}
             <div className="bg-gradient-to-r from-red-950/40 via-amber-950/40 to-slate-800/60 border border-red-500/30 rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-red-400 font-bold text-sm">

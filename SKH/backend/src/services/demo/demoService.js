@@ -369,7 +369,10 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
 
 /**
  * Trigger escalation demo for the requested channel directly.
- * Executes ONLY the clicked channel (WhatsApp, SMS, or Voice) without unintended escalation to other channels.
+ * Strictly executes ONLY the clicked channel:
+ * - WHATSAPP -> WhatsApp only
+ * - SMS (or MESSAGE) -> SMS text message only
+ * - VOICE (or PHONE) -> Phone voice call only
  */
 async function triggerEscalationDemo({
   phoneNumber = DEMO_FARMER_PHONE,
@@ -378,7 +381,7 @@ async function triggerEscalationDemo({
   language = 'mr'
 }) {
   const { farmer } = await getDemoContext();
-  const dedupeKey = `demo-escalate-${Date.now()}`;
+  const dedupeKey = `demo-channel-${Date.now()}`;
 
   const bodies = {
     WHATSAPP: 'नमस्कार! ई-पीक पाहणी मुदत संपत आहे. कृपया त्वरित नोंदणी पूर्ण करा.',
@@ -386,57 +389,57 @@ async function triggerEscalationDemo({
   };
 
   const targetPhoneNumber = phoneNumber || (farmer ? farmer.phoneNumber : DEMO_FARMER_PHONE);
-  const normalizedChannel = (channel || 'WHATSAPP').toUpperCase();
 
-  // If a specific single channel is requested, dispatch ONLY to that channel
-  if (['WHATSAPP', 'SMS', 'VOICE'].includes(normalizedChannel)) {
-    const res = await sendOnChannel({
-      channel: normalizedChannel,
-      phoneNumber: targetPhoneNumber,
-      farmerId: farmer ? farmer._id : null,
-      type,
-      dedupeKey,
-      language,
-      body: bodies[normalizedChannel]
-    });
-
-    const isSuccess = res.status === ESCALATION_ACTIONS.SENT;
-
-    return {
-      channel: normalizedChannel,
-      phoneNumber: targetPhoneNumber,
-      status: res.status,
-      success: isSuccess,
-      steps: [
-        {
-          action: res.status,
-          channel: normalizedChannel,
-          reason: res.reason,
-          error: res.log?.error
-        }
-      ],
-      channelsAttempted: isSuccess ? [normalizedChannel] : [],
-      reachedVia: isSuccess ? normalizedChannel : null,
-      exhausted: !isSuccess,
-      finalAction: res.status,
-      message: isSuccess
-        ? `Successfully dispatched ${normalizedChannel} notification to ${targetPhoneNumber}`
-        : `Failed to dispatch ${normalizedChannel}: ${res.log?.error || res.reason || 'Provider error'}`,
-      details: res.log || res
-    };
+  // Normalize channel name and aliases
+  let raw = (channel || 'WHATSAPP').toUpperCase().trim();
+  let normalizedChannel = raw;
+  if (['MESSAGE', 'MSG', 'TEXT', 'SMS'].includes(raw)) {
+    normalizedChannel = 'SMS';
+  } else if (['VOICE', 'PHONE', 'CALL', 'PHONE_CALL', 'PHONECALL', 'IVR'].includes(raw)) {
+    normalizedChannel = 'VOICE';
+  } else if (['WHATSAPP', 'WA'].includes(raw)) {
+    normalizedChannel = 'WHATSAPP';
   }
 
-  const result = await runEscalation({
+  if (!['WHATSAPP', 'SMS', 'VOICE'].includes(normalizedChannel)) {
+    throw new Error(`Invalid channel: ${channel}. Must be WHATSAPP, SMS, or VOICE`);
+  }
+
+  // Dispatch ONLY to the specified channel (no cascading/escalation to other channels)
+  const res = await sendOnChannel({
+    channel: normalizedChannel,
     phoneNumber: targetPhoneNumber,
     farmerId: farmer ? farmer._id : null,
     type,
     dedupeKey,
     language,
-    bodies,
-    force: true
-  }, { upToChannel: channel });
+    body: bodies[normalizedChannel]
+  });
 
-  return result;
+  const isSuccess = res.status === ESCALATION_ACTIONS.SENT;
+
+  return {
+    channel: normalizedChannel,
+    phoneNumber: targetPhoneNumber,
+    status: res.status,
+    success: isSuccess,
+    steps: [
+      {
+        action: res.status,
+        channel: normalizedChannel,
+        reason: res.reason,
+        error: res.log?.error
+      }
+    ],
+    channelsAttempted: isSuccess ? [normalizedChannel] : [],
+    reachedVia: isSuccess ? normalizedChannel : null,
+    exhausted: !isSuccess,
+    finalAction: res.status,
+    message: isSuccess
+      ? `Successfully dispatched ${normalizedChannel} notification to ${targetPhoneNumber}`
+      : `Failed to dispatch ${normalizedChannel}: ${res.log?.error || res.reason || 'Provider error'}`,
+    details: res.log || res
+  };
 }
 
 /**

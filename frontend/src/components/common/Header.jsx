@@ -1,10 +1,11 @@
 import { Sprout, LogOut } from 'lucide-react';
+import { clearOfficerSession } from '../../pages/OfficerDashboard/statusMeta';
 
 export const Header = () => {
   const token = localStorage.getItem('smart_e_peek_token');
 
   const handleLogout = () => {
-    localStorage.removeItem('smart_e_peek_token');
+    clearOfficerSession(); // removes both token and officer flag
     window.location.href = '/login';
   };
 

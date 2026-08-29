@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "directories": {
     "doc": "docs"
   },
@@ -36,8 +36,7 @@
     "mongoose": "^9.9.1",
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
-    "twilio": "^6.0.2",
-    "zod": "^4.4.3"
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "jest": "^29.7.0",
