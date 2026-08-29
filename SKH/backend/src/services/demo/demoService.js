@@ -7,7 +7,8 @@ const { runCalamityMatching } = require('../relief/calamityMatchingService');
 const { runEscalation, sendOnChannel } = require('../notifications/escalationService');
 const { NOTIFICATION_TYPES, ESCALATION_ACTIONS } = require('../notifications/constants');
 const { cropYear } = require('../survey/constants');
-const { DEMO_FARMER_PHONE } = require('../../../scripts/seedDemoGats');
+
+const DEMO_FARMER_PHONE = '+911234567890';
 
 /**
  * Calculates planar area in hectares for a GeoJSON ring [[lng, lat], ...]
