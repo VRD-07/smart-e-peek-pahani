@@ -17,12 +17,19 @@ const DEMO_OTP = '123456';
  * Associated with every seeded Gat because the point of the walkthrough is to pick
  * one, and there is no land-record system to ask which parcels are actually theirs.
  */
-async function autoRegisterFarmer(phoneNumber) {
+async function autoRegisterFarmer(phoneNumber, { name = 'Murshatpur Farmer', village, taluka, district, division } = {}) {
   const Gat = require('../models/Gat');
-  const gats = await Gat.find({});
+  // Associate with Gats in the selected village if available, or all seeded demo Gats
+  let gats = [];
+  if (village) {
+    gats = await Gat.find({ village });
+  }
+  if (!gats.length) {
+    gats = await Gat.find({});
+  }
 
   return Farmer.create({
-    name: 'Murshatpur Farmer',
+    name: name || 'Murshatpur Farmer',
     phoneNumber,
     preferredLanguage: 'mr',
     associatedGats: gats.map(g => g._id),
@@ -30,15 +37,12 @@ async function autoRegisterFarmer(phoneNumber) {
 }
 
 const requestOtp = async (req, res) => {
-  const { phoneNumber, autoRegister } = req.body;
+  const { phoneNumber, name, division, district, taluka, village, autoRegister } = req.body;
 
   if (!phoneNumber) {
     return errorResponse(res, 'Phone number is required', 'VALIDATION_ERROR', 400);
   }
 
-  // One canonical number from here down. The four-way `$or` this replaces was
-  // papering over the fact that nothing agreed on a format on write; now the model
-  // normalizes both the stored value and the filter, so equality is enough.
   const canonicalPhone = toE164(phoneNumber);
 
   if (!canonicalPhone) {
@@ -47,27 +51,41 @@ const requestOtp = async (req, res) => {
 
   let farmer = await findFarmerByPhone(canonicalPhone);
 
-  // Auto-onboard on demo login when asked, or outside tests, where an unknown
-  // number is a judge typing their own rather than a fixture that should 404.
   if (!farmer) {
     const rawLength = phoneNumber.toString().trim().length;
     if (autoRegister || (process.env.NODE_ENV !== 'test' && rawLength >= 10)) {
-      farmer = await autoRegisterFarmer(canonicalPhone);
+      farmer = await autoRegisterFarmer(canonicalPhone, { name, village, taluka, district, division });
     } else {
       return errorResponse(res, 'Farmer not registered', 'FARMER_NOT_REGISTERED', 404);
     }
+  } else if (name && farmer.name !== name) {
+    farmer.name = name;
+    await farmer.save();
   }
 
-  console.log(`[DEMO] Generated OTP for ${canonicalPhone}: ${DEMO_OTP}`);
+  // Generate 6-digit OTP
+  const generatedOtp = process.env.NODE_ENV === 'test' ? DEMO_OTP : Math.floor(100000 + Math.random() * 900000).toString();
+  console.log(`[AUTH] Generated OTP for ${canonicalPhone}: ${generatedOtp}`);
 
-  const hashedOtp = await bcrypt.hash(DEMO_OTP, 10);
+  const hashedOtp = await bcrypt.hash(generatedOtp, 10);
 
   await OTP.deleteMany({ phoneNumber: canonicalPhone });
   await OTP.create({ phoneNumber: canonicalPhone, otp: hashedOtp });
 
+  // Dispatch actual OTP via WhatsApp if notification provider is configured
+  try {
+    const { getNotificationProvider } = require('../services/notifications/notificationFactory');
+    const provider = getNotificationProvider();
+    const otpMessage = `🏛️ *महाराष्ट्र शासन — ई-पीक पाहणी*\n\nआपला पडताळणी OTP आहे: *${generatedOtp}*\n\nहा OTP कोणाशीही शेअर करू नका.`;
+    await provider.sendMessage(canonicalPhone, otpMessage);
+    console.log(`[AUTH] Dispatched WhatsApp OTP to ${canonicalPhone}`);
+  } catch (err) {
+    console.warn(`[AUTH] WhatsApp OTP dispatch warning:`, err.message);
+  }
+
   return successResponse(res, 'OTP sent successfully', {
-    otp: DEMO_OTP,
     phoneNumber: canonicalPhone,
+    ...(process.env.NODE_ENV === 'test' ? { otp: DEMO_OTP } : {}),
   });
 };
 

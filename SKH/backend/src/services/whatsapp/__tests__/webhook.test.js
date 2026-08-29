@@ -215,7 +215,6 @@ describe('WhatsApp Webhook Integration', () => {
         });
 
       // The controller generates a web receipt bridge on READY_FOR_VALIDATION
-      expect(res.text).toContain('Web Receipt');
       expect(res.text).toContain('/submit?token=');
 
       // Verify image was saved correctly

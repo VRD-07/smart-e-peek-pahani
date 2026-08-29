@@ -1,80 +1,51 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { Button } from '../components/common';
+import { ChevronLeft, ChevronRight, Check, Search, MapPin, User, FileText, CheckCircle2 } from 'lucide-react';
 import { CropSelector, LocationCard, PhotoCapture, Review } from '../components/farmer';
 import { db } from '../storage/db';
 import api from '../services/api';
-import { MAHARASHTRA_DIVISIONS } from '../data/maharashtraData';
 
 const STEPS = [
-  { id: 'details', title: 'Basic Details' },
-  { id: 'location', title: 'Location' },
-  { id: 'photo', title: 'Photograph' },
-  { id: 'review', title: 'Review' }
+  { id: 'gat', title: 'जमीन / गट निवड' },
+  { id: 'crop', title: 'पीक नोंदणी' },
+  { id: 'location', title: 'स्थान पडताळणी' },
+  { id: 'photo', title: 'पिकाचे छायाचित्र' },
+  { id: 'review', title: 'पुनरावलोकन व सबमिट' }
 ];
 
 export const FarmerOnboarding = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Retrieve selected location from localStorage
+  const savedLocation = JSON.parse(localStorage.getItem('smart_e_peek_location') || '{}');
+  const villageName = savedLocation.village || 'Murshatpur';
+
   const [formData, setFormData] = useState({
-    name: '', mobile: '', village: '', gat: '', crop: '', location: null, photo: null
+    name: '',
+    mobile: '',
+    village: villageName,
+    taluka: savedLocation.taluka || 'Niphad',
+    district: savedLocation.district || 'Nashik',
+    division: savedLocation.division || 'Nashik',
+    gat: '',
+    gatId: '',
+    crop: 'soybean',
+    season: 'KHARIF',
+    peekType: 'SINGLE',
+    registeredArea: 1.0,
+    waterSource: 'WELL',
+    sowingDate: new Date().toISOString().split('T')[0],
+    location: null,
+    photo: null
   });
 
   const [farmer, setFarmer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [gatSearchQuery, setGatSearchQuery] = useState('');
 
-  // Maharashtra Cadastral Hierarchy states
-  const [showMhSelector, setShowMhSelector] = useState(false);
-  const [selectedDivId, setSelectedDivId] = useState('NASHIK');
-  const [selectedDistId, setSelectedDistId] = useState('NASHIK_DIST');
-  const [selectedTalukaId, setSelectedTalukaId] = useState('NIPHAD');
-  const [selectedVillageName, setSelectedVillageName] = useState('Murshatpur');
-
-  const currentDivision = MAHARASHTRA_DIVISIONS.find(d => d.id === selectedDivId);
-  const currentDistrict = currentDivision?.districts.find(d => d.id === selectedDistId);
-  const currentTaluka = currentDistrict?.talukas.find(t => t.id === selectedTalukaId);
-  const currentVillage = currentTaluka?.villages.find(v => v.name === selectedVillageName);
-
-  const [activeHubTab, setActiveHubTab] = useState('crop');
-  const [historyList, setHistoryList] = useState([]);
-  const [plantingsList, setPlantingsList] = useState([]);
-  const [plantingForm, setPlantingForm] = useState({ plantingType: '', count: '', approximateLocation: '' });
-  const [plantingSuccess, setPlantingSuccess] = useState(false);
-
-  // Fetch Gat history and plantings when Gat selection changes
-  useEffect(() => {
-    if (formData.gatId) {
-      api.get(`/farmers/gats/${formData.gatId}/history`)
-        .then(res => setHistoryList(res.data.data || []))
-        .catch(() => setHistoryList([]));
-
-      api.get(`/farmers/plantings?gatId=${formData.gatId}`)
-        .then(res => setPlantingsList(res.data.data || []))
-        .catch(() => setPlantingsList([]));
-    }
-  }, [formData.gatId]);
-
-  const handlePlantingSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/farmers/plantings', {
-        gatId: formData.gatId,
-        plantingType: plantingForm.plantingType,
-        count: plantingForm.count ? parseInt(plantingForm.count, 10) : undefined,
-        approximateLocation: { text: plantingForm.approximateLocation }
-      });
-      setPlantingSuccess(true);
-      setPlantingForm({ plantingType: '', count: '', approximateLocation: '' });
-      // Refresh list
-      const res = await api.get(`/farmers/plantings?gatId=${formData.gatId}`);
-      setPlantingsList(res.data.data || []);
-      setTimeout(() => setPlantingSuccess(false), 3000);
-    } catch (err) {
-      alert('Failed to register planting');
-    }
-  };
+  // Fetch farmer profile and associated Gats
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
@@ -83,52 +54,40 @@ export const FarmerOnboarding = () => {
         const farmerData = response.data.data;
         setFarmer(farmerData);
 
-        if (farmerData.associatedGats && farmerData.associatedGats.length === 1) {
-          const singleGat = farmerData.associatedGats[0];
-          setFormData(prev => ({
-            ...prev,
-            gatId: singleGat._id,
-            name: farmerData.name,
-            mobile: farmerData.phoneNumber,
-            village: singleGat.village,
-            gat: singleGat.gatNumber
-          }));
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            name: farmerData.name,
-            mobile: farmerData.phoneNumber
-          }));
-        }
+        const defaultGat = farmerData.associatedGats?.[0];
+        setFormData(prev => ({
+          ...prev,
+          name: farmerData.name || prev.name,
+          mobile: farmerData.phoneNumber || prev.mobile,
+          gatId: prev.gatId || defaultGat?._id,
+          gat: prev.gat || defaultGat?.gatNumber || '101',
+          village: defaultGat?.village || prev.village || villageName,
+        }));
 
+        // Load existing draft if any
         const draft = await db.submissions.where('status').equals('DRAFT').first();
-        if (draft && farmerData.associatedGats?.some(g => g._id === draft.data?.gatId)) {
+        if (draft && draft.data) {
           setFormData(prev => ({ ...prev, ...draft.data }));
         }
       } catch (err) {
-        if (err.response) {
-          if (err.response.status === 404) setError('Farmer profile could not be found.');
-          else if (err.response.status === 400) setError('No land parcel is currently associated with this farmer.');
-          else setError('Failed to load farmer profile.');
+        if (err.response?.status === 401) {
+          navigate('/login');
         } else {
-          setError('Network error. Unable to reach the server.');
+          setError('शेतकरी प्रोफाइल लोड करण्यात अडचण आली.');
         }
       } finally {
         setLoading(false);
       }
     };
     fetchFarmer();
-  }, []);
+  }, [navigate, villageName]);
 
+  // Reset location if Gat changes
   useEffect(() => {
-    setFormData(prev => {
-      if (prev.location) {
-        return { ...prev, location: null };
-      }
-      return prev;
-    });
+    setFormData(prev => ({ ...prev, location: null }));
   }, [formData.gatId]);
 
+  // Autosave draft
   useEffect(() => {
     const saveDraft = async () => {
       if (!formData.name && !formData.mobile) return;
@@ -160,7 +119,7 @@ export const FarmerOnboarding = () => {
       setCurrentStep(prev => prev - 1);
       window.scrollTo(0, 0);
     } else {
-      navigate('/');
+      navigate('/login');
     }
   };
 
@@ -177,372 +136,29 @@ export const FarmerOnboarding = () => {
     navigate(`/submission/${submissionId}`);
   };
 
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 0:
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
-              <h3 className="font-semibold text-gray-900 border-b pb-2">Farmer Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-gray-500">Name</p>
-                  <p className="font-medium text-gray-900">{farmer?.name || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Mobile Number</p>
-                  <p className="font-medium text-gray-900">{farmer?.phoneNumber || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Language</p>
-                  <p className="font-medium text-gray-900">{farmer?.preferredLanguage === 'mr' ? 'मराठी (Marathi)' : 'English'}</p>
-                </div>
-              </div>
+  // Available Gats from farmer profile or default list
+  const availableGats = farmer?.associatedGats?.length > 0
+    ? farmer.associatedGats
+    : (savedLocation.defaultGats || ['101', '102', '103', '104', '105', '106']).map(num => ({
+        _id: `demo_${num}`,
+        gatNumber: num,
+        village: villageName,
+        district: savedLocation.district || 'Nashik',
+        registeredArea: num === '101' ? 2.5 : num === '102' ? 1.8 : num === '103' ? 3.2 : 2.0
+      }));
 
-              <div className="flex justify-between items-center border-b pb-2 mt-4">
-                <h3 className="font-semibold text-gray-900">जमीन निवडा (Select Your Land)</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowMhSelector(!showMhSelector)}
-                  className="text-xs text-primary-600 font-semibold hover:underline flex items-center gap-1"
-                >
-                  {showMhSelector ? 'माझे गट दाखवा' : '+ महाराष्ट्र महसूल स्थान निवडा'}
-                </button>
-              </div>
-
-              {showMhSelector && (
-                <div className="p-4 bg-primary-50/50 border border-primary-200 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-primary-800">
-                    <span>🏛️</span> महाराष्ट्र शासन महसूल स्थान निवड (Cadastral Selection)
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">१. महसूल विभाग (Division)</label>
-                      <select
-                        value={selectedDivId}
-                        onChange={(e) => {
-                          setSelectedDivId(e.target.value);
-                          setSelectedDistId('');
-                          setSelectedTalukaId('');
-                          setSelectedVillageName('');
-                        }}
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                      >
-                        <option value="">-- विभाग निवडा --</option>
-                        {MAHARASHTRA_DIVISIONS.map(d => (
-                          <option key={d.id} value={d.id}>{d.nameMr} ({d.name})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">२. जिल्हा (District)</label>
-                      <select
-                        value={selectedDistId}
-                        disabled={!selectedDivId}
-                        onChange={(e) => {
-                          setSelectedDistId(e.target.value);
-                          setSelectedTalukaId('');
-                          setSelectedVillageName('');
-                        }}
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
-                      >
-                        <option value="">-- जिल्हा निवडा --</option>
-                        {currentDivision?.districts.map(dist => (
-                          <option key={dist.id} value={dist.id}>{dist.nameMr} ({dist.name})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">३. तालुका (Taluka)</label>
-                      <select
-                        value={selectedTalukaId}
-                        disabled={!selectedDistId}
-                        onChange={(e) => {
-                          setSelectedTalukaId(e.target.value);
-                          setSelectedVillageName('');
-                        }}
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
-                      >
-                        <option value="">-- तालुका निवडा --</option>
-                        {currentDistrict?.talukas.map(tal => (
-                          <option key={tal.id} value={tal.id}>{tal.nameMr} ({tal.name})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">४. गाव (Village)</label>
-                      <select
-                        value={selectedVillageName}
-                        disabled={!selectedTalukaId}
-                        onChange={(e) => setSelectedVillageName(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
-                      >
-                        <option value="">-- गाव निवडा --</option>
-                        {currentTaluka?.villages.map(v => (
-                          <option key={v.name} value={v.name}>{v.nameMr} ({v.name})</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {currentVillage && (
-                    <div className="pt-2 border-t border-primary-100">
-                      <label className="block text-[11px] font-medium text-gray-700 mb-1.5">५. उपलब्ध गट नंबर निवडा (Gat Number):</label>
-                      <div className="flex flex-wrap gap-2">
-                        {currentVillage.defaultGats.map(gatNum => {
-                          const matchedGat = farmer?.associatedGats?.find(g => g.gatNumber === gatNum);
-                          return (
-                            <button
-                              key={gatNum}
-                              type="button"
-                              onClick={() => {
-                                const matched = farmer?.associatedGats?.find(g => g.gatNumber === gatNum);
-                                const defaultId = matched?._id || farmer?.associatedGats?.[0]?._id;
-                                setFormData(prev => ({
-                                  ...prev,
-                                  gatId: defaultId,
-                                  village: currentVillage.name,
-                                  gat: gatNum,
-                                  district: currentDistrict?.name,
-                                  taluka: currentTaluka?.name,
-                                  division: currentDivision?.name
-                                }));
-                              }}
-                              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                                formData.gat === gatNum && formData.village === currentVillage.name
-                                  ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
-                                  : 'bg-white text-gray-800 border-gray-300 hover:border-primary-500'
-                              }`}
-                            >
-                              गट क्र. {gatNum}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {farmer?.associatedGats?.length > 0 && !showMhSelector ? (
-                <div className="space-y-3">
-                  {farmer.associatedGats.map(gat => (
-                    <div
-                      key={gat._id}
-                      onClick={() => setFormData(prev => ({ ...prev, gatId: gat._id, village: gat.village, gat: gat.gatNumber }))}
-                      className={`p-3 rounded-xl border cursor-pointer transition-colors ${formData.gatId === gat._id ? 'border-primary-500 bg-primary-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <p className="font-semibold text-gray-900">गट क्र. {gat.gatNumber}</p>
-                        {formData.gatId === gat._id && <Check className="w-5 h-5 text-primary-600" />}
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>गाव: {gat.village}, जि. {gat.district}</span>
-                        {gat.registeredArea && <span className="font-medium text-primary-700">{gat.registeredArea} ha</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : !showMhSelector && (
-                <p className="text-sm text-gray-500">No Gats assigned.</p>
-              )}
-            </div>
-
-            {formData.gatId && (
-              <div className="space-y-4">
-                {/* Farm Action Hub Navigation */}
-                <div className="grid grid-cols-4 gap-1.5 p-1 bg-gray-100 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setActiveHubTab('crop')}
-                    className={`py-2 text-[11px] font-semibold rounded-lg transition-all ${activeHubTab === 'crop' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  >
-                    पीक नोंदणी
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveHubTab('history')}
-                    className={`py-2 text-[11px] font-semibold rounded-lg transition-all ${activeHubTab === 'history' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  >
-                    इतिहास ({historyList.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveHubTab('plantings')}
-                    className={`py-2 text-[11px] font-semibold rounded-lg transition-all ${activeHubTab === 'plantings' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  >
-                    बांध लागवड
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveHubTab('other')}
-                    className={`py-2 text-[11px] font-semibold rounded-lg transition-all ${activeHubTab === 'other' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  >
-                    इतर नोंदी
-                  </button>
-                </div>
-
-                {/* Tab 1: Crop Survey */}
-                {activeHubTab === 'crop' && (
-                  <CropSelector
-                    formData={formData}
-                    setFormData={setFormData}
-                    gat={farmer?.associatedGats?.find(g => g._id === formData.gatId)}
-                  />
-                )}
-
-                {/* Tab 2: History */}
-                {activeHubTab === 'history' && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
-                    <h3 className="font-semibold text-gray-900 text-sm border-b pb-2">गट क्र. {formData.gat} वरील मागील नोंदी (Filing History)</h3>
-                    {historyList.length === 0 ? (
-                      <p className="text-xs text-gray-500 py-4 text-center">या गटावर अद्याप कोणतीही नोंद आढळली नाही.</p>
-                    ) : (
-                      <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                        {historyList.map(sub => (
-                          <div key={sub._id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="font-semibold text-gray-900">{sub.crop?.declaredCrop || 'Unknown Crop'}</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                sub.status === 'VALID' ? 'bg-green-100 text-green-800' :
-                                sub.status === 'REVIEW' ? 'bg-yellow-100 text-yellow-800' :
-                                sub.status === 'INVALID' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {sub.status}
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-gray-500 text-[11px]">
-                              <span>क्षेत्र: {sub.registeredArea ? `${sub.registeredArea} ha` : '-'}</span>
-                              <span>तारीख: {new Date(sub.sowingDate || sub.createdAt).toLocaleDateString('mr-IN')}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tab 3: Boundary Plantings */}
-                {activeHubTab === 'plantings' && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
-                    <div className="border-b pb-2">
-                      <h3 className="font-semibold text-gray-900 text-sm">बांध लागवड नोंदणी (Boundary Tree / Hedge Planting)</h3>
-                      <p className="text-[11px] text-gray-500 mt-0.5">शेताच्या बांधावरील झाडे व फळझाडे नोंदवा (माहितीसाठी)</p>
-                    </div>
-
-                    {plantingSuccess && (
-                      <div className="p-2.5 bg-green-50 text-green-800 rounded-xl text-xs font-medium">
-                        ✓ बांध लागवड यशस्वीरित्या नोंदवली गेली!
-                      </div>
-                    )}
-
-                    <form onSubmit={handlePlantingSubmit} className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">झाडाचा / वनस्पतीचा प्रकार (Tree / Plant Type)</label>
-                        <input
-                          type="text"
-                          required
-                          value={plantingForm.plantingType}
-                          onChange={(e) => setPlantingForm(prev => ({ ...prev, plantingType: e.target.value }))}
-                          placeholder="उदा. आंबा, सागवान, बांबू, निंब"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">संख्या (Count)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={plantingForm.count}
-                            onChange={(e) => setPlantingForm(prev => ({ ...prev, count: e.target.value }))}
-                            placeholder="उदा. 15"
-                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">अंदाजे जागा (Location)</label>
-                          <input
-                            type="text"
-                            value={plantingForm.approximateLocation}
-                            onChange={(e) => setPlantingForm(prev => ({ ...prev, approximateLocation: e.target.value }))}
-                            placeholder="उदा. उत्तरेकडील बांध"
-                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-                      >
-                        नोंद जतन करा (Save Planting Record)
-                      </button>
-                    </form>
-
-                    {plantingsList.length > 0 && (
-                      <div className="pt-3 border-t space-y-2">
-                        <h4 className="font-semibold text-gray-800 text-xs">नोंदवलेली झाडे:</h4>
-                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                          {plantingsList.map(p => (
-                            <div key={p._id} className="p-2 bg-gray-50 rounded-lg text-[11px] flex justify-between">
-                              <span className="font-medium text-gray-900">{p.plantingType} {p.count ? `(${p.count})` : ''}</span>
-                              <span className="text-gray-500">{p.approximateLocation?.text || 'बांध'}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tab 4: Other Actions Stub */}
-                {activeHubTab === 'other' && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
-                    <h3 className="font-semibold text-gray-900 text-sm border-b pb-2">इतर शासकीय नोंदणी सेवा (Other Land Actions)</h3>
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2">
-                      <p className="font-semibold">⚠️ पुढील सेवा सध्या डिजिटल विकासाधीन आहेत (Planned in next release):</p>
-                      <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800">
-                        <li>शेतरस्ता / वहिवाट नोंदणी (Farm Road Registration)</li>
-                        <li>विहीर / कूपनलिका स्वतंत्र नोंद (Independent Well Registry)</li>
-                        <li>पडिक जमीन / अकृषिक क्षेत्र नोंद (Fallow Land Registry)</li>
-                      </ul>
-                      <p className="text-[10px] text-amber-700 italic">शासकीय ई-पीक पाहणी मानकांनुसार ही वैशिष्ट्ये पुढील टप्प्यात उपलब्ध केली जातील.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      case 1:
-        return <LocationCard formData={formData} setFormData={setFormData} gat={farmer?.associatedGats?.find(g => g._id === formData.gatId)} />;
-      case 2:
-        return <PhotoCapture formData={formData} setFormData={setFormData} />;
-      case 3:
-        return <Review formData={formData} />;
-      default:
-        return null;
-    }
-  };
+  const filteredGats = availableGats.filter(g =>
+    (g.gatNumber || '').toLowerCase().includes(gatSearchQuery.toLowerCase()) ||
+    (g.village || '').toLowerCase().includes(gatSearchQuery.toLowerCase())
+  );
 
   const isStepValid = () => {
     switch (currentStep) {
-      case 0: return formData.gatId && formData.crop;
-      // A location outside the parcel may still be filed. The client-side check is
-      // advisory — the authoritative decision is the backend validation gate, which
-      // records the filing and flags it for an officer with the distance attached.
-      // Blocking here instead hid the out-of-bounds case from the record entirely,
-      // which is worse: a farmer who has picked the wrong Gat gets no trace and no
-      // officer ever sees it. Poor accuracy still blocks: that is not a decision
-      // about where they are, it is not knowing where they are.
-      case 1: return Boolean(formData.location)
-        && (formData.location.isValid === true || formData.location.status === 'OUTSIDE');
-      case 2: return formData.photo !== null;
-      case 3: return true;
+      case 0: return Boolean(formData.gatId || formData.gat);
+      case 1: return Boolean(formData.crop);
+      case 2: return Boolean(formData.location) && (formData.location.isValid === true || formData.location.status === 'OUTSIDE');
+      case 3: return Boolean(formData.photo);
+      case 4: return true;
       default: return false;
     }
   };
@@ -550,8 +166,8 @@ export const FarmerOnboarding = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] p-4 text-center">
-        <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-gray-900">Loading profile...</h2>
+        <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-4" />
+        <h2 className="text-sm font-bold text-gray-800">माहिती लोड होत आहे...</h2>
       </div>
     );
   }
@@ -559,50 +175,243 @@ export const FarmerOnboarding = () => {
   if (error) {
     return (
       <div className="flex flex-col flex-1 p-4 max-w-md mx-auto w-full justify-center">
-        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Notice</h2>
-          <p className="text-gray-500 mb-6">{error}</p>
-          <Button onClick={() => window.location.reload()} variant="primary">
-            Retry
-          </Button>
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
+          <h2 className="text-base font-bold text-gray-900">सूचना</h2>
+          <p className="text-xs text-gray-500">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-2.5 bg-primary-600 text-white rounded-xl text-xs font-bold"
+          >
+            पुन्हा प्रयत्न करा
+          </button>
         </div>
       </div>
     );
   }
 
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <div className="space-y-4">
+            {/* Farmer Profile Card */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-3">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary-600" />
+                  <h3 className="font-bold text-gray-900 text-xs">शेतकरी तपशील (Farmer Profile)</h3>
+                </div>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
+                  सत्यापित
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] text-gray-500 font-medium">शेतकऱ्याचे नाव</p>
+                  <p className="font-bold text-gray-900 truncate">{farmer?.name || formData.name || 'विठ्ठल पाटील'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-medium">मोबाईल नंबर</p>
+                  <p className="font-bold text-gray-900">{farmer?.phoneNumber || formData.mobile || 'N/A'}</p>
+                </div>
+                <div className="col-span-2 flex items-center gap-1 text-[11px] text-gray-600 bg-gray-50 p-2 rounded-xl">
+                  <MapPin className="w-3.5 h-3.5 text-primary-600 flex-shrink-0" />
+                  <span className="truncate">गाव: {savedLocation.villageMr || villageName}, ता. {savedLocation.talukaMr || 'निफाड'}, जि. {savedLocation.districtMr || 'नाशिक'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Gat & Survey Number Search Card */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-4">
+              <div className="border-b pb-2.5">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-primary-600" />
+                  गट नंबर / सर्व्हे नंबर निवडा (Select Gat)
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  आपल्या शेताचा ७/१२ गट नंबर निवडा किंवा शोधून काढा
+                </p>
+              </div>
+
+              {/* Gat Search Input */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={gatSearchQuery}
+                  onChange={(e) => setGatSearchQuery(e.target.value)}
+                  placeholder="गट नंबर शोधा उदा. 101, 102..."
+                  className="w-full pl-9 pr-3.5 py-2.5 border border-gray-300 rounded-2xl text-xs focus:ring-2 focus:ring-primary-500 focus:outline-none bg-gray-50 focus:bg-white"
+                />
+              </div>
+
+              {/* Gat Cards Grid */}
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {filteredGats.map(g => {
+                  const isSelected = formData.gat === g.gatNumber || formData.gatId === g._id;
+                  return (
+                    <div
+                      key={g._id}
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          gatId: g._id,
+                          gat: g.gatNumber,
+                          village: g.village || villageName,
+                          registeredArea: g.registeredArea ? Math.min(g.registeredArea, 1.0) : 1.0
+                        }));
+                      }}
+                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-emerald-600 bg-emerald-50/60 shadow-sm ring-1 ring-emerald-500'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5">
+                          🏛️ गट क्र. {g.gatNumber}
+                        </p>
+                        {isSelected && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-600">
+                        <span>गाव: {g.village || villageName}</span>
+                        {g.registeredArea && (
+                          <span className="font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md text-[11px]">
+                            क्षेत्र: {g.registeredArea} हेक्टर (ha)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filteredGats.length === 0 && (
+                  <div className="text-center py-4 text-xs text-gray-500 space-y-2">
+                    <p>हा गट नंबर यादीत सापडला नाही.</p>
+                    {gatSearchQuery.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customNum = gatSearchQuery.trim();
+                          const defaultId = farmer?.associatedGats?.[0]?._id || `custom_${customNum}`;
+                          setFormData(prev => ({
+                            ...prev,
+                            gatId: defaultId,
+                            gat: customNum,
+                            village: villageName
+                          }));
+                        }}
+                        className="px-3 py-1.5 bg-primary-600 text-white rounded-xl text-xs font-bold"
+                      >
+                        + &quot;गट क्र. {gatSearchQuery}&quot; जोडा व पुढे जा
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 1:
+        return (
+          <CropSelector
+            formData={formData}
+            setFormData={setFormData}
+            gat={farmer?.associatedGats?.find(g => g._id === formData.gatId) || {
+              gatNumber: formData.gat,
+              registeredArea: formData.registeredArea || 1.0,
+              village: formData.village
+            }}
+          />
+        );
+
+      case 2:
+        return (
+          <LocationCard
+            formData={formData}
+            setFormData={setFormData}
+            gat={farmer?.associatedGats?.find(g => g._id === formData.gatId) || {
+              gatNumber: formData.gat,
+              village: formData.village
+            }}
+          />
+        );
+
+      case 3:
+        return <PhotoCapture formData={formData} setFormData={setFormData} />;
+
+      case 4:
+        return <Review formData={formData} />;
+
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 max-w-md mx-auto w-full bg-gray-50">
-      {/* Progress Header */}
-      <div className="bg-white px-4 py-4 sticky top-16 z-40 border-b border-gray-100 shadow-sm">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-primary-600">Step {currentStep + 1} of {STEPS.length}</span>
-          <span className="text-sm font-medium text-gray-500">{STEPS[currentStep].title}</span>
+    <div className="flex flex-col flex-1 max-w-md mx-auto w-full bg-gray-50 pb-32">
+      {/* Progress Stepper Bar */}
+      <div className="bg-white px-4 py-3.5 sticky top-16 z-30 border-b border-gray-100 shadow-sm">
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-xs font-bold text-emerald-700">
+            पायरी {currentStep + 1} / {STEPS.length}
+          </span>
+          <span className="text-xs font-semibold text-gray-700">
+            {STEPS[currentStep].title}
+          </span>
         </div>
         <div className="flex gap-1.5">
-          {STEPS.map((step, idx) => (
-            <div key={step.id} className={`h-1.5 flex-1 rounded-full ${idx <= currentStep ? 'bg-primary-500' : 'bg-gray-200'}`} />
+          {STEPS.map((s, idx) => (
+            <div
+              key={s.id}
+              className={`h-1.5 flex-1 rounded-full transition-all ${
+                idx <= currentStep ? 'bg-emerald-600' : 'bg-gray-200'
+              }`}
+            />
           ))}
         </div>
       </div>
 
-      {/* Form Content */}
-      <div className="flex-1 p-4 pb-24">
+      {/* Main Step Content */}
+      <div className="flex-1 p-4">
         {renderStepContent()}
       </div>
 
-      {/* Footer Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
+      {/* Sticky Bottom Navigation Bar (Always Visible & Elevated) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 p-4 z-50 shadow-2xl">
         <div className="max-w-md mx-auto flex gap-3">
-          <Button variant="secondary" onClick={handlePrev} className="w-auto px-4 shrink-0">
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <Button onClick={handleNext} disabled={!isStepValid()} className="flex-1">
+          <button
+            type="button"
+            onClick={handlePrev}
+            className="w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold flex-shrink-0 transition-all"
+            title="मागे जा"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!isStepValid()}
+            className={`flex-1 py-3.5 px-5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+              isStepValid()
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-[0.99]'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
             {currentStep === STEPS.length - 1 ? (
-              <>Submit Registration <Check className="w-5 h-5" /></>
+              <>
+                <span>ई-पीक पाहणी नोंदणी पूर्ण करा</span>
+                <Check className="w-5 h-5" />
+              </>
             ) : (
-              <>Next Step <ChevronRight className="w-5 h-5" /></>
+              <>
+                <span>पुढे जा (Next Step)</span>
+                <ChevronRight className="w-5 h-5" />
+              </>
             )}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
