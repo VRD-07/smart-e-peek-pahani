@@ -124,14 +124,6 @@ const DICTIONARY = {
     // told so — a record that is never checked must not look like one that passed.
     PLANTING_INFO_ONLY: 'ही नोंद केवळ माहितीसाठी आहे. ती पीक पडताळणीचा भाग नाही आणि तिची पडताळणी होत नाही.',
 
-    // ---- Submission outcomes ----
-    SUBMISSION_OUTCOME_VALID: '✅ अभिनंदन! तुमची ई-पीक पाहणी नोंद यशस्वीरीत्या मंजूर झाली आहे.\n\n📍 शेत: गट {{gat}} ({{village}})\n🌱 पीक: {{crop}}\n📐 क्षेत्र: {{area}}\n📅 हंगाम: {{season}}\n\nनोंदणी क्रमांक: {{submissionId}}',
-    SUBMISSION_OUTCOME_CROP_MISMATCH: '⚠️ पिकाच्या फोटोमध्ये तफावत आढळली.\n\nनोंदवलेले पीक: {{declaredCrop}}\nफोटोमध्ये आढळलेले पीक: {{detectedCrop}}\n\nतुमची नोंद रद्द झालेली नाही — ती तलाठ्यांच्या पुनरावलोकनासाठी (REVIEW) पाठवली आहे. कृपया पुन्हा नोंद करू नका.',
-    SUBMISSION_OUTCOME_NEAR_BOUNDARY: 'ℹ️ तुमचे लोकेशन शेताच्या हद्दीजवळ (बांधावर) आढळले आहे.\n\nही नोंद तलाठ्यांच्या नियमित तपासणीसाठी (REVIEW) पाठवली आहे.',
-    SUBMISSION_OUTCOME_OUTSIDE_BOUNDS: '🔴 तुमचे लोकेशन शेताच्या हद्दीबाहेर आहे.\n\nतुम्ही नोंदणीकृत शेतापासून अंदाजे {{distance}} दूर आहात. कृपया शेतात उभे राहून पुन्हा नोंद करा किंवा योग्य गट निवडा.',
-    SUBMISSION_OUTCOME_AREA_OVERRUN: '⚠️ तुम्ही नोंदवलेले क्षेत्र या गटाच्या नोंदणीकृत क्षेत्रात बसत नाही.\n\nनोंदणीकृत क्षेत्र: {{registered}}\nया हंगामातील एकूण नोंद: {{claimed}}\n\nतुमची नोंद रद्द झालेली नाही — ती अधिकाऱ्यांच्या तपासणीसाठी (REVIEW) पाठवली आहे.',
-    SUBMISSION_OUTCOME_REVIEW_GENERAL: 'ℹ️ तुमची नोंद प्राप्त झाली असून ती अधिकाऱ्यांच्या पुनरावलोकनासाठी (REVIEW) पाठवली आहे.\n\nतपशील: {{reason}}',
-
     // ---- Area overallocation outcome ----
     AREA_OVERALLOCATION_NOTICE: 'तुम्ही नोंदवलेले क्षेत्र या गटाच्या नोंदणीकृत क्षेत्रात बसत नाही.\n\nनोंदणीकृत क्षेत्र: {{registered}}\nया हंगामातील एकूण नोंद: {{claimed}}\n\nतुमची नोंद रद्द झालेली नाही — ती अधिकाऱ्यांच्या तपासणीसाठी पाठवली आहे. पुन्हा नोंद करू नका.',
 
@@ -257,14 +249,6 @@ const DICTIONARY = {
     SUBMISSION_OUTCOME_VALID: '✅ बधाई! आपकी ई-पीक पाहणी नोंदणी सफलतापूर्वक सत्यापित हो गई है।\n\n📍 खेत: गट {{gat}} ({{village}})\n🌱 फसल: {{crop}}\n📐 क्षेत्र: {{area}}\n📅 मौसम: {{season}}\n\nनोंदणी क्रमांक: {{submissionId}}',
     SUBMISSION_OUTCOME_CROP_MISMATCH: '⚠️ फसल के फोटो में अंतर पाया गया।\n\nदर्ज की गई फसल: {{declaredCrop}}\nफोटो में पहचानी गई फसल: {{detectedCrop}}\n\nआपकी नोंद रद्द नहीं हुई है — यह तलाठी की जाँच (REVIEW) के लिए भेजी गई है। कृपया दोबारा दर्ज न करें।',
     SUBMISSION_OUTCOME_NEAR_BOUNDARY: 'ℹ️ आपकी लोकेशन खेत की सीमा के पास (मेड़ पर) पाई गई है।\n\nयह नोंद तलाठी की नियमित जाँच (REVIEW) के लिए भेजी गई है।',
-    SUBMISSION_OUTCOME_OUTSIDE_BOUNDS: '🔴 आपकी लोकेशन खेत की सीमा से बाहर है।\n\nआप अपने पंजीकृत खेत से लगभग {{distance}} दूर हैं। कृपया खेत में खड़े होकर दोबारा दर्ज करें या सही गट चुनें।',
-    SUBMISSION_OUTCOME_AREA_OVERRUN: '⚠️ दर्ज किया गया क्षेत्र इस गट के पंजीकृत क्षेत्र से अधिक है।\n\nयह नोंद अधिकारी की समीक्षा (REVIEW) के लिए भेजी गई है।',
-    SUBMISSION_OUTCOME_REVIEW_GENERAL: 'ℹ️ आपकी नोंद प्राप्त हुई है और अधिकारी की जाँच (REVIEW) के लिए भेजी गई है।\n\nविवरण: {{reason}}',
-
-    // ---- Area overallocation outcome ----
-    AREA_OVERALLOCATION_NOTICE: 'आपने दर्ज किया क्षेत्र इस गट के पंजीकृत क्षेत्र में नहीं बैठता।\n\nपंजीकृत क्षेत्र: {{registered}}\nइस मौसम की कुल नोंद: {{claimed}}\n\nआपकी नोंद रद्द नहीं हुई है — वह अधिकारी की जाँच के लिए भेजी गई है। दोबारा दर्ज न करें।',
-
-    // ---- Out-of-boundary outcome ----
     OUT_OF_BOUNDS_DISTANCE_NOTICE: 'आप अपने पंजीकृत खेत की सीमा से लगभग {{distance}} दूर हैं।\n\nअपने खेत में खड़े होकर दोबारा दर्ज करें, या सूची से सही गट चुनें।',
 
     // ---- Awareness (Phase 6) ----
@@ -381,14 +365,6 @@ const DICTIONARY = {
     SUBMISSION_OUTCOME_VALID: '✅ Congratulations! Your E-Peek Pahani crop filing has been verified successfully.\n\n📍 Field: Gat {{gat}} ({{village}})\n🌱 Crop: {{crop}}\n📐 Area: {{area}}\n📅 Season: {{season}}\n\nFiling ID: {{submissionId}}',
     SUBMISSION_OUTCOME_CROP_MISMATCH: '⚠️ Crop photo discrepancy detected.\n\nDeclared crop: {{declaredCrop}}\nAI detected crop: {{detectedCrop}}\n\nYour filing has not been rejected — it has been forwarded to the talathi for review (REVIEW). Please do not file again.',
     SUBMISSION_OUTCOME_NEAR_BOUNDARY: 'ℹ️ Your GPS location is right on the field boundary ({{distance}}).\n\nThis filing has been sent for routine officer review (REVIEW).',
-    SUBMISSION_OUTCOME_OUTSIDE_BOUNDS: '🔴 Your location is outside the registered field boundary.\n\nYou are approximately {{distance}} away. Please stand inside your field and refile, or select the correct Gat number.',
-    SUBMISSION_OUTCOME_AREA_OVERRUN: '⚠️ The declared area ({{claimed}}) exceeds this Gat\'s registered size ({{registered}}).\n\nYour record has been forwarded for officer review (REVIEW).',
-    SUBMISSION_OUTCOME_REVIEW_GENERAL: 'ℹ️ Your filing was received and sent to an officer for review (REVIEW).\n\nDetails: {{reason}}',
-
-    // ---- Area overallocation outcome ----
-    AREA_OVERALLOCATION_NOTICE: 'The area you entered does not fit within this Gat\'s registered size.\n\nRegistered area: {{registered}}\nTotal recorded this season: {{claimed}}\n\nYour record has not been rejected — it has been sent to an officer for review. Please do not file it again.',
-
-    // ---- Out-of-boundary outcome ----
     OUT_OF_BOUNDS_DISTANCE_NOTICE: 'You are approximately {{distance}} away from your registered field boundary.\n\nPlease file again while standing in your field, or select the correct Gat from the list.',
 
     // ---- Awareness (Phase 6) ----

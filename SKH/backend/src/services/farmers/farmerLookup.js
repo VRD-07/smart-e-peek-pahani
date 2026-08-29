@@ -48,30 +48,4 @@ async function findFarmerByPhone(phoneNumber, { populate = null } = {}) {
   return stale;
 }
 
-async function findOrCreateFarmerByPhone(phoneNumber, { name = 'Farmer', preferredLanguage = 'mr', populate = null } = {}) {
-  const canonical = toE164(phoneNumber);
-  if (!canonical) return null;
-
-  let farmer = await findFarmerByPhone(canonical, { populate });
-  if (farmer) return farmer;
-
-  // Auto-register new farmer with available demo Gats so they are never blocked
-  const Gat = require('../../models/Gat');
-  const demoGats = await Gat.find({}).limit(6);
-  const gatIds = demoGats.map(g => g._id);
-
-  farmer = await Farmer.create({
-    name,
-    phoneNumber: canonical,
-    preferredLanguage,
-    associatedGats: gatIds
-  });
-
-  if (populate) {
-    await farmer.populate(populate);
-  }
-
-  return farmer;
-}
-
-module.exports = { findFarmerByPhone, findOrCreateFarmerByPhone };
+module.exports = { findFarmerByPhone };

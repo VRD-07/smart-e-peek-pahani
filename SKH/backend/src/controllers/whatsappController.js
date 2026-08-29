@@ -51,7 +51,6 @@ async function handleWebhook(req, res) {
     );
 
     // 1.5 Fetch Farmer
-    const { findFarmerByPhone } = require('../services/farmers/farmerLookup');
     const farmer = await findFarmerByPhone(phoneNumber, { populate: 'associatedGats' });
 
     // 1.55 Adopt the farmer's stored language preference onto a fresh session.
@@ -284,60 +283,41 @@ async function handleWebhook(req, res) {
           const bridge = await createBridgeToken(phoneNumber, createdSubmission._id);
           replyText += `\n\nSubmit your data securely here: ${bridge.url}`;
 
+          // Step 3 - Connect Submission to Validation internally
           const { validateSubmission } = require('../services/validation/validationService');
           const validated = await validateSubmission(createdSubmission._id);
-          const valResult = validated?.validationResultId;
-          const { formatHectares } = require('../services/survey/areaUnits');
-          const { formatDistance } = require('../utils/distance');
 
-          const Gat = require('../models/Gat');
-          const selectedGat = await Gat.findById(submissionData.gatId);
-
-          const locationCheck = valResult?.checks?.location;
-          const cropCheck = valResult?.checks?.crop;
-          const areaCheck = valResult?.checks?.area;
-
-          let outcomeMessage = '';
-
-          if (validated?.status === 'VALID' || valResult?.overallStatus === 'PASS') {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_VALID', language, {
-              gat: selectedGat?.gatNumber || currentSession.gatNumber || '101',
-              village: selectedGat?.village || 'शेतावर',
-              crop: submissionData.crop?.declaredCrop || 'सोयाबीन',
-              area: submissionData.registeredArea || selectedGat?.registeredArea || 1.0,
-              season: submissionData.season || 'KHARIF',
-              submissionId: createdSubmission.clientSubmissionId || createdSubmission._id
-            });
-          } else if (locationCheck && locationCheck.reasonCode === LOCATION_REASON_CODES.OUTSIDE_BOUNDARY) {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_OUTSIDE_BOUNDS', language, {
-              distance: formatDistance(locationCheck.distanceFromBoundary || 5000, language)
-            });
-          } else if (cropCheck && (cropCheck.status === 'FAIL' || cropCheck.status === 'REVIEW') && cropCheck.detectedCrop && cropCheck.detectedCrop !== cropCheck.declaredCrop) {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_CROP_MISMATCH', language, {
-              declaredCrop: cropCheck.declaredCrop || submissionData.crop?.declaredCrop,
-              detectedCrop: cropCheck.detectedCrop
-            });
-          } else if (areaCheck && areaCheck.reasonCode === AREA_REASON_CODES.AREA_OVERALLOCATION) {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_AREA_OVERRUN', language, {
+          // The area overallocation outcome gets its own message. "Sent for
+          // review" on its own leaves a farmer with nothing to act on, and this is
+          // the one review reason they can actually check — the figures are on
+          // their own 7/12 record.
+          const areaCheck = validated?.validationResultId?.checks?.area;
+          if (areaCheck && areaCheck.reasonCode === AREA_REASON_CODES.AREA_OVERALLOCATION) {
+            const { formatHectares } = require('../services/survey/areaUnits');
+            replyText += `\n\n${getMessage('AREA_OVERALLOCATION_NOTICE', language, {
               registered: formatHectares(areaCheck.registeredArea, language),
-              claimed: formatHectares(areaCheck.claimedTotal, language)
-            });
-          } else if (locationCheck && locationCheck.reasonCode === LOCATION_REASON_CODES.NEAR_BOUNDARY) {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_NEAR_BOUNDARY', language, {
-              distance: formatDistance(locationCheck.distanceFromBoundary || 10, language)
-            });
-          } else if (valResult?.reasons && valResult.reasons.length > 0) {
-            outcomeMessage = getMessage('SUBMISSION_OUTCOME_REVIEW_GENERAL', language, {
-              reason: valResult.reasons[0]
-            });
-          } else {
-            outcomeMessage = getMessage('READY', language);
+              claimed: formatHectares(areaCheck.claimedTotal, language),
+            })}`;
           }
 
-          replyText = `${outcomeMessage}\n\n🔗 ई-पावती / तपशील (Web Receipt):\n${bridge.url}`;
+          // Same reasoning for a filing made outside the parcel: the distance is
+          // the difference between "walk back into your field" and "you have
+          // selected the wrong Gat", and only the farmer can tell which it is.
+          // Deliberately not extended to the near-boundary REVIEW case — a filing
+          // a few metres inside its own edge is not a farmer who went to the wrong
+          // place, and telling them a distance would suggest they had.
+          const locationCheck = validated?.validationResultId?.checks?.location;
+          if (locationCheck
+            && locationCheck.reasonCode === LOCATION_REASON_CODES.OUTSIDE_BOUNDARY
+            && typeof locationCheck.distanceFromBoundary === 'number') {
+            const { formatDistance } = require('../utils/distance');
+            replyText += `\n\n${getMessage('OUT_OF_BOUNDS_DISTANCE_NOTICE', language, {
+              distance: formatDistance(locationCheck.distanceFromBoundary, language),
+            })}`;
+          }
         } catch (error) {
           if (error.code === 11000) {
-            replyText = getMessage('ERROR', language);
+            replyText = getMessage('ERROR', language); // or duplicate error msg if it existed
           } else {
             console.error('[WhatsApp Controller] Error creating submission:', error);
             replyText = getMessage('ERROR', language);
