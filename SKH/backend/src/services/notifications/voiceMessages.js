@@ -17,7 +17,7 @@ const { NOTIFICATION_TYPES } = require('./constants');
  */
 const VOICE_ASSETS = {
   [NOTIFICATION_TYPES.DEADLINE_REMINDER]: {
-    file: 'reminder-mr.wav',
+    file: 'reminder-mr.mp3',
     script: 'नमस्कार. ई-पीक पाहणी नोंदणीची अंतिम तारीख जवळ आली आहे. '
       + 'या हंगामात तुमच्या पिकाची नोंद आमच्याकडे दिसत नाही. '
       + 'नोंद करण्यासाठी आमच्या व्हॉट्सअ‍ॅप क्रमांकावर हाय असा संदेश पाठवा. धन्यवाद.',

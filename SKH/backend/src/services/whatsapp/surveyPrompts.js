@@ -36,7 +36,13 @@ const {
 const { CROP_CATEGORIES, cropsInCategory, cropLabel } = require('../crops/cropCatalogue');
 const { formatHectares } = require('../survey/areaUnits');
 const { formatSowingDate } = require('../survey/sowingDate');
-const { getFeaturedVillages } = require('../../data/maharashtraData');
+const {
+  getDivisions,
+  getDistricts,
+  getTalukas,
+  getVillagesInTaluka,
+  getFeaturedVillages
+} = require('../../data/maharashtraData');
 
 // How many worked examples a crop-name prompt shows for the chosen class. Enough
 // to make the class concrete, few enough that the farmer does not read it as the
@@ -240,11 +246,70 @@ function gatSelectionPrompt(language, gats = [], context = {}) {
   );
 }
 
-/** First tier of the farm picker / initial step: which village. */
+/** First tier: Division / Region selection */
+function divisionSelectionPrompt(language, divisions = [], context = {}) {
+  let list = divisions && divisions.length ? divisions : (context.divisions && context.divisions.length ? context.divisions : null);
+  if (!list || list.length === 0) {
+    list = getDivisions();
+  }
+  const options = list.slice(0, MAX_LIST_ROWS).map((div) => {
+    const label = div.nameMr ? `${div.nameMr} (${div.name})` : div.name;
+    return {
+      key: div.id || div.name,
+      label,
+      keywords: [div.id, div.name, div.nameMr].filter(Boolean),
+    };
+  });
+  const headingKey = context.invalid ? 'INVALID_DIVISION_SELECTION' : 'ASK_DIVISION_SELECTION';
+  return listPrompt(getMessage(headingKey, language), options);
+}
+
+/** Second tier: District selection */
+function districtSelectionPrompt(language, districts = [], context = {}) {
+  let list = districts && districts.length ? districts : (context.districts && context.districts.length ? context.districts : null);
+  if (!list || list.length === 0) {
+    list = getDistricts(context.selectedDivision || 'NASHIK');
+  }
+  const options = list.slice(0, MAX_LIST_ROWS).map((dist) => {
+    const label = dist.nameMr && dist.nameMr !== dist.name ? `${dist.nameMr} (${dist.name})` : dist.name;
+    return {
+      key: dist.name,
+      label,
+      keywords: [dist.id, dist.name, dist.nameMr].filter(Boolean),
+    };
+  });
+  const headingKey = context.invalid ? 'INVALID_DISTRICT_SELECTION' : 'ASK_DISTRICT_SELECTION';
+  return listPrompt(getMessage(headingKey, language), options);
+}
+
+/** Third tier: Taluka selection */
+function talukaSelectionPrompt(language, talukas = [], context = {}) {
+  let list = talukas && talukas.length ? talukas : (context.talukas && context.talukas.length ? context.talukas : null);
+  if (!list || list.length === 0) {
+    list = getTalukas(context.selectedDistrict || 'Nashik');
+  }
+  const options = list.slice(0, MAX_LIST_ROWS).map((tal) => {
+    const label = tal.nameMr && tal.nameMr !== tal.name ? `${tal.nameMr} (${tal.name})` : tal.name;
+    return {
+      key: tal.name,
+      label,
+      keywords: [tal.id, tal.name, tal.nameMr].filter(Boolean),
+    };
+  });
+  const headingKey = context.invalid ? 'INVALID_TALUKA_SELECTION' : 'ASK_TALUKA_SELECTION';
+  return listPrompt(getMessage(headingKey, language), options);
+}
+
+/** Fourth tier: Village selection */
 function villageSelectionPrompt(language, villages = [], context = {}) {
   let list = villages && villages.length ? villages : (context.villages && context.villages.length ? context.villages : null);
   if (!list || list.length === 0) {
-    list = getFeaturedVillages();
+    if (context.selectedTaluka) {
+      list = getVillagesInTaluka(context.selectedTaluka);
+    }
+    if (!list || list.length === 0) {
+      list = getFeaturedVillages();
+    }
   }
   const options = list.slice(0, MAX_LIST_ROWS).map((village) => {
     if (typeof village === 'object' && village !== null) {
@@ -353,11 +418,17 @@ function plantingLocationPrompt(language) {
  *
  * @param {string} state - one of STATES
  * @param {string} language
- * @param {Object} [context] - { gat, gats, villages, otherActiveArea, remainingArea,
+ * @param {Object} [context] - { gat, gats, villages, talukas, districts, divisions, otherActiveArea, remainingArea,
  *   cropCategory, cropCandidates }
  */
 function promptForState(state, language, context = {}) {
   switch (state) {
+    case STATES.WAITING_FOR_DIVISION_SELECTION:
+      return divisionSelectionPrompt(language, context.divisions, context);
+    case STATES.WAITING_FOR_DISTRICT_SELECTION:
+      return districtSelectionPrompt(language, context.districts, context);
+    case STATES.WAITING_FOR_TALUKA_SELECTION:
+      return talukaSelectionPrompt(language, context.talukas, context);
     case STATES.WAITING_FOR_VILLAGE_SELECTION:
       return villageSelectionPrompt(language, context.villages, context);
     case STATES.WAITING_FOR_GAT_SELECTION:
@@ -406,6 +477,9 @@ module.exports = {
   cropConfirmPrompt,
   sowingDatePrompt,
   gatSelectionPrompt,
+  divisionSelectionPrompt,
+  districtSelectionPrompt,
+  talukaSelectionPrompt,
   villageSelectionPrompt,
   actionHubPrompt,
   notImplementedMessage,

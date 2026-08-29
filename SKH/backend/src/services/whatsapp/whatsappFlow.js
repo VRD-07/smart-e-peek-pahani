@@ -53,7 +53,17 @@ const { WATER_SOURCES, SURVEY_ACTIONS, cropYear } = require('../survey/constants
 const { parseArea, formatHectares } = require('../survey/areaUnits');
 const { parseSowingDate } = require('../survey/sowingDate');
 const { cropCategory: categoryOfCrop } = require('../crops/cropCatalogue');
-const { getFeaturedVillages, findVillage } = require('../../data/maharashtraData');
+const {
+  getDivisions,
+  findDivision,
+  getDistricts,
+  findDistrict,
+  getTalukas,
+  findTaluka,
+  getVillagesInTaluka,
+  getFeaturedVillages,
+  findVillage,
+} = require('../../data/maharashtraData');
 
 // Why a crop declaration did not land, and what to say about it. Voice and text
 // share this table because the failure is about the *words*, not the channel —
@@ -155,27 +165,37 @@ function plainReply(state, language, messageKey) {
 }
 
 /**
- * Initial step of the WhatsApp flow: Village Selection.
+ * Initial step of the WhatsApp flow: Division (Region) Selection.
  *
- * Prompts the farmer to select their village from the active village list (with
- * Marathi and English names), or type any Maharashtra village name directly.
+ * Prompts the farmer to select their Administrative Division (Region),
+ * then District -> Taluka -> Village -> Gat.
  */
-function villageSelection(language, farmer, context, prefix = null) {
-  const villages = (context && context.villages && context.villages.length)
-    ? context.villages
-    : getFeaturedVillages();
+function divisionSelection(language, farmer, context, prefix = null) {
+  const divisions = (context && context.divisions && context.divisions.length)
+    ? context.divisions
+    : getDivisions();
 
   return advance(
-    STATES.WAITING_FOR_VILLAGE_SELECTION,
+    STATES.WAITING_FOR_DIVISION_SELECTION,
     language,
-    { ...context, villages },
-    { selectedVillage: null, selectedGatId: null },
+    { ...context, divisions },
+    {
+      selectedDivision: null,
+      selectedDistrict: null,
+      selectedTaluka: null,
+      selectedVillage: null,
+      selectedGatId: null,
+    },
     prefix,
   );
 }
 
+function villageSelection(language, farmer, context, prefix = null) {
+  return divisionSelection(language, farmer, context, prefix);
+}
+
 function farmSelection(language, farmer, context, prefix = null) {
-  return villageSelection(language, farmer, context, prefix);
+  return divisionSelection(language, farmer, context, prefix);
 }
 
 /**
@@ -279,7 +299,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
         };
       }
 
-      const restarted = villageSelection(switched, farmer, promptContext, notice);
+      const restarted = divisionSelection(switched, farmer, promptContext, notice);
       return {
         ...restarted,
         updatedSessionData: { ...restarted.updatedSessionData, language: switched },
@@ -288,7 +308,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
     }
 
     if (RESTART_KEYWORDS.includes(lowered)) {
-      return villageSelection(language, farmer, promptContext, getMessage('WELCOME', language));
+      return divisionSelection(language, farmer, promptContext, getMessage('WELCOME', language));
     }
   }
 
@@ -298,10 +318,100 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
     // restart rather than answering a question nobody was asked.
     case STATES.START:
     case STATES.LANGUAGE_SELECTION:
-      return villageSelection(language, farmer, promptContext, getMessage('WELCOME', language));
+      return divisionSelection(language, farmer, promptContext, getMessage('WELCOME', language));
+
+    case STATES.WAITING_FOR_DIVISION_SELECTION: {
+      const pool = (promptContext.divisions && promptContext.divisions.length)
+        ? promptContext.divisions
+        : getDivisions();
+      const prompt = promptForState(currentState, language, { ...promptContext, divisions: pool });
+      let chosenDivision = null;
+
+      if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
+        const chosen = matchOption(prompt, parsedMessage.data.text);
+        if (chosen) {
+          chosenDivision = findDivision(chosen.key);
+        } else {
+          chosenDivision = findDivision(parsedMessage.data.text);
+        }
+      }
+
+      if (!chosenDivision) {
+        return reask(currentState, language, { ...promptContext, divisions: pool, invalid: true }, 'INVALID_DIVISION_SELECTION');
+      }
+
+      const districts = getDistricts(chosenDivision.id);
+      return advance(
+        STATES.WAITING_FOR_DISTRICT_SELECTION,
+        language,
+        { ...promptContext, districts, selectedDivision: chosenDivision.id },
+        { selectedDivision: chosenDivision.id, selectedDistrict: null, selectedTaluka: null, selectedVillage: null, selectedGatId: null },
+      );
+    }
+
+    case STATES.WAITING_FOR_DISTRICT_SELECTION: {
+      const pool = (promptContext.districts && promptContext.districts.length)
+        ? promptContext.districts
+        : getDistricts(session.selectedDivision || 'NASHIK');
+      const prompt = promptForState(currentState, language, { ...promptContext, districts: pool });
+      let chosenDistrict = null;
+
+      if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
+        const chosen = matchOption(prompt, parsedMessage.data.text);
+        if (chosen) {
+          chosenDistrict = findDistrict(chosen.key, session.selectedDivision);
+        } else {
+          chosenDistrict = findDistrict(parsedMessage.data.text, session.selectedDivision);
+        }
+      }
+
+      if (!chosenDistrict) {
+        return reask(currentState, language, { ...promptContext, districts: pool, invalid: true }, 'INVALID_DISTRICT_SELECTION');
+      }
+
+      const talukas = getTalukas(chosenDistrict.name);
+      return advance(
+        STATES.WAITING_FOR_TALUKA_SELECTION,
+        language,
+        { ...promptContext, talukas, selectedDistrict: chosenDistrict.name },
+        { selectedDistrict: chosenDistrict.name, selectedTaluka: null, selectedVillage: null, selectedGatId: null },
+      );
+    }
+
+    case STATES.WAITING_FOR_TALUKA_SELECTION: {
+      const pool = (promptContext.talukas && promptContext.talukas.length)
+        ? promptContext.talukas
+        : getTalukas(session.selectedDistrict || 'Nashik');
+      const prompt = promptForState(currentState, language, { ...promptContext, talukas: pool });
+      let chosenTaluka = null;
+
+      if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
+        const chosen = matchOption(prompt, parsedMessage.data.text);
+        if (chosen) {
+          chosenTaluka = findTaluka(chosen.key, session.selectedDistrict);
+        } else {
+          chosenTaluka = findTaluka(parsedMessage.data.text, session.selectedDistrict);
+        }
+      }
+
+      if (!chosenTaluka) {
+        return reask(currentState, language, { ...promptContext, talukas: pool, invalid: true }, 'INVALID_TALUKA_SELECTION');
+      }
+
+      const villages = getVillagesInTaluka(chosenTaluka.name);
+      return advance(
+        STATES.WAITING_FOR_VILLAGE_SELECTION,
+        language,
+        { ...promptContext, villages, selectedTaluka: chosenTaluka.name },
+        { selectedTaluka: chosenTaluka.name, selectedVillage: null, selectedGatId: null },
+      );
+    }
 
     case STATES.WAITING_FOR_VILLAGE_SELECTION: {
-      const prompt = promptForState(currentState, language, promptContext);
+      const pool = (promptContext.villages && promptContext.villages.length)
+        ? promptContext.villages
+        : (session.selectedTaluka ? getVillagesInTaluka(session.selectedTaluka) : getFeaturedVillages());
+      const prompt = promptForState(currentState, language, { ...promptContext, villages: pool });
       let chosenVillageName = null;
 
       if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
@@ -309,7 +419,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
         if (chosen) {
           chosenVillageName = chosen.key;
         } else {
-          const found = findVillage(parsedMessage.data.text);
+          const found = findVillage(parsedMessage.data.text, session.selectedTaluka);
           if (found) {
             chosenVillageName = found.name;
           }
@@ -317,7 +427,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
       }
 
       if (!chosenVillageName) {
-        return reask(currentState, language, { ...promptContext, invalid: true }, 'INVALID_VILLAGE_SELECTION');
+        return reask(currentState, language, { ...promptContext, villages: pool, invalid: true }, 'INVALID_VILLAGE_SELECTION');
       }
 
       const allFarmerGats = farmer?.associatedGats || [];
@@ -327,7 +437,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
         : ((promptContext.gats && promptContext.gats.length) ? promptContext.gats : allFarmerGats);
 
       if (!gatsPool || gatsPool.length === 0) {
-        const found = findVillage(chosenVillageName);
+        const found = findVillage(chosenVillageName, session.selectedTaluka);
         const defNumbers = found?.defaultGats || ['101', '102', '103', '104', '105', '106'];
         gatsPool = defNumbers.map((num) => ({
           _id: `gat_${num}`,

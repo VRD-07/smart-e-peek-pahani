@@ -499,7 +499,7 @@ describe('Escalation Ladder - voice call TwiML', () => {
 
     const twiml = buildVoiceTwiml(NOTIFICATION_TYPES.DEADLINE_REMINDER);
 
-    expect(twiml).toContain('<Play>https://demo.test/assets/voice/reminder-mr.wav</Play>');
+    expect(twiml).toContain('<Play>https://demo.test/assets/voice/reminder-mr.mp3</Play>');
     expect(twiml).toContain('<Pause length="1"/>');
     // Twice, because someone answering mid-sentence cannot scroll back.
     expect(twiml.match(/<Play>/g)).toHaveLength(2);

@@ -90,7 +90,7 @@ class TwilioNotificationProvider extends NotificationProvider {
     }
   }
 
-  async placeVoiceCall(to, twiml) {
+  async placeVoiceCall(to, twiml, options = {}) {
     if (!to) {
       return { error: 'INVALID_RECIPIENT', message: 'Missing recipient number' };
     }
@@ -105,15 +105,20 @@ class TwilioNotificationProvider extends NotificationProvider {
     }
 
     try {
-      // Inline TwiML rather than a `url` callback: the document is static per
-      // message type, so hosting a webhook for Twilio to fetch it would add a
-      // publicly reachable endpoint for no gain. The audio file inside it does
-      // still have to be publicly reachable — see VOICE_AUDIO_BASE_URL.
-      const call = await this.client.calls.create({
+      const callParams = {
         from: this.voiceFrom,
         to: to.replace(/^whatsapp:/, ''),
-        twiml,
-      });
+      };
+
+      // Twilio Trial accounts forbid inline `twiml` parameters and require a hosted webhook `url`.
+      // When VOICE_AUDIO_BASE_URL is configured, use the hosted TwiML URL to avoid trial restrictions.
+      if (env.voiceAudioBaseUrl && options.type) {
+        callParams.url = `${env.voiceAudioBaseUrl.replace(/\/+$/, '')}/twiml?type=${encodeURIComponent(options.type)}`;
+      } else {
+        callParams.twiml = twiml;
+      }
+
+      const call = await this.client.calls.create(callParams);
 
       return { callId: call.sid };
     } catch (error) {

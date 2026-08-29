@@ -79,6 +79,19 @@ app.use(
   })
 );
 
+const { buildVoiceTwiml } = require('./src/services/notifications/voiceMessages');
+
+// TwiML webhook endpoint for Twilio Voice calls.
+// Twilio sends a POST request by default to fetch TwiML when placing a call.
+app.all(['/assets/voice/twiml', '/api/voice/twiml'], (req, res) => {
+  const type = req.query.type || req.body?.type || 'DEADLINE_REMINDER';
+  const twiml = buildVoiceTwiml(type);
+  if (!twiml) {
+    return res.status(404).type('text/plain').send('Voice asset not found');
+  }
+  res.type('text/xml').send(twiml);
+});
+
 const { handleCheckSystemHealth } = require('./src/controllers/demoController');
 const { startBackupJob } = require('./src/jobs/backupJob');
 

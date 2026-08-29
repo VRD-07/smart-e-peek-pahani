@@ -122,7 +122,7 @@ describe('WhatsApp Webhook Integration', () => {
       expect(session).toBeDefined();
     });
 
-    it('should preserve session state across multiple requests (Start -> Village -> Gat -> Action -> Season)', async () => {
+    it('should preserve session state across multiple requests (Start -> Division -> District -> Taluka -> Village -> Gat -> Action -> Season)', async () => {
       const sender = 'whatsapp:+2222222222';
 
       const Farmer = require('../../../models/Farmer');
@@ -136,33 +136,55 @@ describe('WhatsApp Webhook Integration', () => {
       });
       await Farmer.create({ name: 'Test', phoneNumber: sender, associatedGats: [gat._id] });
 
-      // Request 1: Start -> opens at WAITING_FOR_VILLAGE_SELECTION
+      // Request 1: Start -> opens at WAITING_FOR_DIVISION_SELECTION
       const res1 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: 'hi' });
       expect(res1.status).toBe(200);
+      expect(res1.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_DIVISION_SELECTION);
 
-      // Request 2: Select "1" (Murshatpur) -> advances to WAITING_FOR_GAT_SELECTION
+      // Request 2: Select "1" (Nashik Division) -> advances to WAITING_FOR_DISTRICT_SELECTION
       const res2 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: '1' });
       expect(res2.status).toBe(200);
-      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_GAT_SELECTION);
+      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_DISTRICT_SELECTION);
 
-      // Request 3: Select "1" (Gat 111) -> advances to WAITING_FOR_ACTION
+      // Request 3: Select "1" (Nashik District) -> advances to WAITING_FOR_TALUKA_SELECTION
       const res3 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: '1' });
       expect(res3.status).toBe(200);
-      expect(res3.text).toContain(DICTIONARY[LANGUAGES.MR].ACTION_REGISTER_CROP);
+      expect(res3.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_TALUKA_SELECTION);
 
-      // Request 4: Select "1" (Register Crop) -> advances to WAITING_FOR_SEASON
+      // Request 4: Select "1" (Niphad Taluka) -> advances to WAITING_FOR_VILLAGE_SELECTION
       const res4 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: '1' });
-
       expect(res4.status).toBe(200);
-      expect(res4.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SEASON);
+      expect(res4.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_VILLAGE_SELECTION);
+
+      // Request 5: Select "1" (Murshatpur) -> advances to WAITING_FOR_GAT_SELECTION
+      const res5 = await request(app)
+        .post('/api/whatsapp/webhook')
+        .send({ From: sender, Body: '1' });
+      expect(res5.status).toBe(200);
+      expect(res5.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_GAT_SELECTION);
+
+      // Request 6: Select "1" (Gat 111) -> advances to WAITING_FOR_ACTION
+      const res6 = await request(app)
+        .post('/api/whatsapp/webhook')
+        .send({ From: sender, Body: '1' });
+      expect(res6.status).toBe(200);
+      expect(res6.text).toContain(DICTIONARY[LANGUAGES.MR].ACTION_REGISTER_CROP);
+
+      // Request 7: Select "1" (Register Crop) -> advances to WAITING_FOR_SEASON
+      const res7 = await request(app)
+        .post('/api/whatsapp/webhook')
+        .send({ From: sender, Body: '1' });
+
+      expect(res7.status).toBe(200);
+      expect(res7.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SEASON);
 
       // Verify DB state
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });

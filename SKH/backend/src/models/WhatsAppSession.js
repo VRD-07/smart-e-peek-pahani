@@ -30,8 +30,15 @@ const whatsappSessionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Gat',
   },
-  // Set only on the two-tier farm picker, when a farmer has more Gats than a
-  // WhatsApp list can hold and chooses a village before a parcel.
+  selectedDivision: {
+    type: String,
+  },
+  selectedDistrict: {
+    type: String,
+  },
+  selectedTaluka: {
+    type: String,
+  },
   selectedVillage: {
     type: String,
   },

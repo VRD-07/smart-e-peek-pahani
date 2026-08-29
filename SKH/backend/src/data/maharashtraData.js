@@ -1948,6 +1948,139 @@ function getAllVillages() {
   return list;
 }
 
+function getDivisions() {
+  return MAHARASHTRA_DIVISIONS.map(d => ({
+    id: d.id,
+    name: d.name,
+    nameMr: d.nameMr
+  }));
+}
+
+function findDivision(query) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim().toLowerCase();
+  const divisions = getDivisions();
+
+  // Match by 1-based index
+  const index = parseInt(q, 10);
+  if (!isNaN(index) && index >= 1 && index <= divisions.length) {
+    return divisions[index - 1];
+  }
+
+  // Match by id or name
+  return divisions.find(d =>
+    d.id.toLowerCase() === q ||
+    d.name.toLowerCase() === q ||
+    (d.nameMr && d.nameMr.toLowerCase() === q) ||
+    d.name.toLowerCase().includes(q) ||
+    (d.nameMr && d.nameMr.includes(q))
+  ) || null;
+}
+
+function getDistricts(divisionIdOrName) {
+  let targetDivs = MAHARASHTRA_DIVISIONS;
+  if (divisionIdOrName) {
+    const q = String(divisionIdOrName).trim().toLowerCase();
+    targetDivs = MAHARASHTRA_DIVISIONS.filter(d =>
+      d.id.toLowerCase() === q ||
+      d.name.toLowerCase() === q ||
+      (d.nameMr && d.nameMr.toLowerCase() === q) ||
+      d.name.toLowerCase().includes(q)
+    );
+  }
+
+  const list = [];
+  for (const div of targetDivs) {
+    for (const dist of div.districts || []) {
+      list.push({
+        id: dist.id,
+        name: dist.name,
+        nameMr: dist.nameMr,
+        divisionId: div.id,
+        divisionName: div.name
+      });
+    }
+  }
+  return list;
+}
+
+function findDistrict(query, divisionIdOrName) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim().toLowerCase();
+  const districts = getDistricts(divisionIdOrName);
+
+  // Match by 1-based index
+  const index = parseInt(q, 10);
+  if (!isNaN(index) && index >= 1 && index <= districts.length) {
+    return districts[index - 1];
+  }
+
+  return districts.find(d =>
+    d.id.toLowerCase() === q ||
+    d.name.toLowerCase() === q ||
+    (d.nameMr && d.nameMr.toLowerCase() === q) ||
+    d.name.toLowerCase().includes(q) ||
+    (d.nameMr && d.nameMr.includes(q))
+  ) || null;
+}
+
+function getTalukas(districtIdOrName) {
+  let list = [];
+  for (const div of MAHARASHTRA_DIVISIONS) {
+    for (const dist of div.districts || []) {
+      if (!districtIdOrName ||
+          dist.id.toLowerCase() === String(districtIdOrName).toLowerCase() ||
+          dist.name.toLowerCase() === String(districtIdOrName).toLowerCase() ||
+          (dist.nameMr && dist.nameMr.toLowerCase() === String(districtIdOrName).toLowerCase()) ||
+          dist.name.toLowerCase().includes(String(districtIdOrName).toLowerCase())) {
+        for (const tal of dist.talukas || []) {
+          list.push({
+            id: tal.id,
+            name: tal.name,
+            nameMr: tal.nameMr,
+            districtId: dist.id,
+            districtName: dist.name,
+            districtMr: dist.nameMr,
+            villages: tal.villages || []
+          });
+        }
+      }
+    }
+  }
+  return list;
+}
+
+function findTaluka(query, districtIdOrName) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim().toLowerCase();
+  const talukas = getTalukas(districtIdOrName);
+
+  // Match by 1-based index
+  const index = parseInt(q, 10);
+  if (!isNaN(index) && index >= 1 && index <= talukas.length) {
+    return talukas[index - 1];
+  }
+
+  return talukas.find(t =>
+    t.id.toLowerCase() === q ||
+    t.name.toLowerCase() === q ||
+    (t.nameMr && t.nameMr.toLowerCase() === q) ||
+    t.name.toLowerCase().includes(q) ||
+    (t.nameMr && t.nameMr.includes(q))
+  ) || null;
+}
+
+function getVillagesInTaluka(talukaIdOrName) {
+  const talukas = getTalukas();
+  const taluka = talukas.find(t =>
+    t.id.toLowerCase() === String(talukaIdOrName || '').toLowerCase() ||
+    t.name.toLowerCase() === String(talukaIdOrName || '').toLowerCase() ||
+    (t.nameMr && t.nameMr.toLowerCase() === String(talukaIdOrName || '').toLowerCase()) ||
+    t.name.toLowerCase().includes(String(talukaIdOrName || '').toLowerCase())
+  );
+  return taluka?.villages || [];
+}
+
 const FEATURED_VILLAGE_NAMES = [
   'Murshatpur',
   'Pimpalgaon Baswant',
@@ -1972,28 +2105,49 @@ function getFeaturedVillages() {
   );
 }
 
-function findVillage(query) {
+function findVillage(query, talukaIdOrName) {
   if (!query || typeof query !== 'string') return null;
   const q = query.trim().toLowerCase();
-  const all = getAllVillages();
-  // Exact match first
-  const exact = all.find(v =>
+  const pool = talukaIdOrName ? getVillagesInTaluka(talukaIdOrName) : getAllVillages();
+
+  // Match by 1-based index if taluka is given
+  const index = parseInt(q, 10);
+  if (!isNaN(index) && index >= 1 && index <= pool.length) {
+    return pool[index - 1];
+  }
+
+  // Exact match
+  const exact = pool.find(v =>
     v.name.toLowerCase() === q ||
     (v.nameMr && v.nameMr.trim().toLowerCase() === q)
   );
   if (exact) return exact;
 
-  // Substring match second
-  return all.find(v =>
+  // Substring match
+  const sub = pool.find(v =>
     v.name.toLowerCase().includes(q) ||
     (v.nameMr && v.nameMr.includes(q))
-  ) || null;
+  );
+  if (sub) return sub;
+
+  // Fallback to all villages if searched globally
+  if (talukaIdOrName) {
+    return findVillage(query);
+  }
+  return null;
 }
 
 module.exports = {
   MAHARASHTRA_DIVISIONS,
   getAllVillages,
   getFeaturedVillages,
+  getDivisions,
+  findDivision,
+  getDistricts,
+  findDistrict,
+  getTalukas,
+  findTaluka,
+  getVillagesInTaluka,
   findVillage,
   FEATURED_VILLAGE_NAMES
 };

@@ -30,13 +30,19 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'तुमचा WhatsApp नंबर नोंदणीकृत नाही. कृपया प्रथम शेतकरी नोंदणी पूर्ण करा.',
     MISSING_GAT: 'तुमचे प्रोफाईल कोणत्याही गटाशी जोडलेले नाही. कृपया प्रोफाईल अपडेट करा.',
 
-    // ---- Farm selection ----
+    // ---- Administrative & Farm selection ----
+    ASK_DIVISION_SELECTION: 'कृपया आपला महसूल विभाग (Region) निवडा:',
+    INVALID_DIVISION_SELECTION: 'चुकीचा विभाग. कृपया यादीतील योग्य क्रमांक निवडा किंवा विभागाचे नाव लिहा:',
+    ASK_DISTRICT_SELECTION: 'कृपया आपला जिल्हा निवडा:',
+    INVALID_DISTRICT_SELECTION: 'चुकीचा जिल्हा. कृपया यादीतील योग्य क्रमांक निवडा किंवा जिल्ह्याचे नाव लिहा:',
+    ASK_TALUKA_SELECTION: 'कृपया आपला तालुका निवडा:',
+    INVALID_TALUKA_SELECTION: 'चुकीचा तालुका. कृपया यादीतील योग्य क्रमांक निवडा किंवा तालुक्याचे नाव लिहा:',
+    ASK_VILLAGE_SELECTION: 'कृपया आपले गाव निवडा (किंवा गावाचे नाव टाइप करा):',
+    INVALID_VILLAGE_SELECTION: 'चुकीचे गाव. कृपया यादीतील क्रमांक निवडा किंवा गावाचे नाव टाइप करा:',
     GAT_LABEL: 'गट {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'कृपया तुम्ही कोणत्या गटाची नोंदणी करत आहात ते निवडा:',
     INVALID_GAT_SELECTION: 'चुकीची निवड. कृपया योग्य क्रमांक पाठवा:',
-    ASK_VILLAGE_SELECTION: 'कृपया आपले गाव निवडा (किंवा गावाचे नाव थेट टाइप करा):',
-    INVALID_VILLAGE_SELECTION: 'चुकीचे गाव किंवा क्रमांक. कृपया यादीतील क्रमांक निवडा किंवा गावाचे नाव टाइप करा:',
-    MANY_GATS_HINT: 'यादीत {{total}} पैकी पहिली {{shown}} शेते दिसत आहेत. तुमचा गट क्रमांक थेट टाइप करूनही निवडता येईल.',
+    MANY_GATS_HINT: 'यादीत {{total}} पैकी पहिली {{shown}} शेते दिसत आहेत. तुमचा गट क्रमांक थेट टाइप करूनही निवडता येईल:',
 
     // ---- Farm action hub ----
     ASK_ACTION: 'गट {{gat}} — {{village}}\n\nतुम्हाला काय करायचे आहे?',
@@ -125,6 +131,11 @@ const DICTIONARY = {
     // told so — a record that is never checked must not look like one that passed.
     PLANTING_INFO_ONLY: 'ही नोंद केवळ माहितीसाठी आहे. ती पीक पडताळणीचा भाग नाही आणि तिची पडताळणी होत नाही.',
 
+    // ---- Submission outcomes ----
+    SUBMISSION_OUTCOME_VALID: '✅ *अभिनंदन! तुमची ई-पीक पाहणी नोंदणी यशस्वीरित्या प्रमाणित झाली आहे.*\n\n📋 *नोंदणी तपशील:*\n• अर्ज क्रमांक: {{submissionId}}\n• गाव: {{village}} | गट क्र.: {{gat}}\n• पीक: {{crop}}\n• क्षेत्र: {{area}} हेक्टर\n• हंगाम: {{season}}\n\n🤖 *AI पडताळणी:*\n• ओळखलेले पीक: {{detectedCrop}} (अचूकता: {{confidence}}%)\n• स्थिती: ✅ प्रमाणित (APPROVED)\n\nआपला पीक पाहणी अर्ज शासकीय दप्तरी यशस्वीरीत्या नोंदवला गेला आहे.',
+    SUBMISSION_OUTCOME_REVIEW: '⏳ *तुमचा ई-पीक पाहणी अर्ज पुनरावलोकनाखाली (UNDER REVIEW) आहे.*\n\n📋 *नोंदणी तपशील:*\n• अर्ज क्रमांक: {{submissionId}}\n• गाव: {{village}} | गट क्र.: {{gat}}\n• नोंदवलेले पीक: {{crop}}\n• हंगाम: {{season}}\n\n🤖 *AI पडताळणी तपशील:*\n• फोटोतील पीक: {{detectedCrop}}\n• स्थिती: ⏳ तलाठी / कृषी अधिकारी तपासणीसाठी वर्ग (UNDER REVIEW)\n\nℹ️ {{reasons}}\n\nआपला अर्ज रद्द झालेला नाही. कृपया पुन्हा नोंदणी करू नका.',
+    SUBMISSION_OUTCOME_INVALID: '❌ *ई-पीक पाहणी नोंदणीमध्ये त्रुटी आढळली (REJECTED).*\n\n📋 *तपशील:*\n• गट क्र.: {{gat}} (गाव: {{village}})\n• नोंदवलेले पीक: {{crop}}\n\nकारण:\n{{reasons}}\n\nकृपया आपल्या शेतात प्रत्यक्ष उपस्थित राहून पुन्हा \'Hi\' पाठवून अचूक फोटो व लोकेशनसह नोंदणी करा.',
+
     // ---- Area overallocation outcome ----
     AREA_OVERALLOCATION_NOTICE: 'तुम्ही नोंदवलेले क्षेत्र या गटाच्या नोंदणीकृत क्षेत्रात बसत नाही.\n\nनोंदणीकृत क्षेत्र: {{registered}}\nया हंगामातील एकूण नोंद: {{claimed}}\n\nतुमची नोंद रद्द झालेली नाही — ती अधिकाऱ्यांच्या तपासणीसाठी पाठवली आहे. पुन्हा नोंद करू नका.',
 
@@ -160,12 +171,18 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'आपका WhatsApp नंबर पंजीकृत नहीं है। कृपया पहले किसान पंजीकरण पूरा करें।',
     MISSING_GAT: 'आपका प्रोफ़ाइल किसी गट से नहीं जुड़ा है। कृपया प्रोफ़ाइल अपडेट करें।',
 
-    // ---- Farm selection ----
+    // ---- Administrative & Farm selection ----
+    ASK_DIVISION_SELECTION: 'कृपया अपना राजस्व संभाग (Region) चुनें:',
+    INVALID_DIVISION_SELECTION: 'गलत संभाग। कृपया सूची में से सही संख्या चुनें या नाम लिखें:',
+    ASK_DISTRICT_SELECTION: 'कृपया अपना ज़िला चुनें:',
+    INVALID_DISTRICT_SELECTION: 'गलत ज़िला। कृपया सूची में से सही संख्या चुनें या नाम लिखें:',
+    ASK_TALUKA_SELECTION: 'कृपया अपनी तहसील / तालुका चुनें:',
+    INVALID_TALUKA_SELECTION: 'गलत तहसील। कृपया सूची में से सही संख्या चुनें या नाम लिखें:',
+    ASK_VILLAGE_SELECTION: 'कृपया अपना गाँव चुनें (या गाँव का नाम सीधे टाइप करें):',
+    INVALID_VILLAGE_SELECTION: 'अमान्य गाँव या संख्या। कृपया सूची में से संख्या चुनें या गाँव का नाम टाइप करें:',
     GAT_LABEL: 'गट {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'कृपया चुनें कि आप किस गट की रिपोर्ट कर रहे हैं:',
     INVALID_GAT_SELECTION: 'अमान्य चयन। कृपया सही संख्या भेजें:',
-    ASK_VILLAGE_SELECTION: 'कृपया अपना गाँव चुनें (या गाँव का नाम सीधे टाइप करें):',
-    INVALID_VILLAGE_SELECTION: 'अमान्य गाँव या संख्या। कृपया सूची में से संख्या चुनें या गाँव का नाम टाइप करें:',
     MANY_GATS_HINT: 'सूची में {{total}} में से पहले {{shown}} खेत दिख रहे हैं। आप अपना गट नंबर सीधे टाइप करके भी चुन सकते हैं।',
 
     // ---- Farm action hub ----
@@ -277,12 +294,18 @@ const DICTIONARY = {
     UNREGISTERED_FARMER: 'Your WhatsApp number is not registered. Please complete farmer registration before submitting your crop details.',
     MISSING_GAT: 'Your farmer profile is not linked to a Gat. Please complete your profile registration.',
 
-    // ---- Farm selection ----
+    // ---- Administrative & Farm selection ----
+    ASK_DIVISION_SELECTION: 'Please select your Administrative Division (Region):',
+    INVALID_DIVISION_SELECTION: 'Invalid division. Please choose a valid number or type the division name:',
+    ASK_DISTRICT_SELECTION: 'Please select your District:',
+    INVALID_DISTRICT_SELECTION: 'Invalid district. Please choose a valid number or type the district name:',
+    ASK_TALUKA_SELECTION: 'Please select your Taluka / Tehsil:',
+    INVALID_TALUKA_SELECTION: 'Invalid taluka. Please choose a valid number or type the taluka name:',
+    ASK_VILLAGE_SELECTION: 'Please select your village (or type the village name directly):',
+    INVALID_VILLAGE_SELECTION: 'Invalid village or selection. Please choose a number or type the village name:',
     GAT_LABEL: 'Gat {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'Please select which field you want to report:',
     INVALID_GAT_SELECTION: 'Invalid selection. Please reply with a valid number:',
-    ASK_VILLAGE_SELECTION: 'Please select your village (or type the village name directly):',
-    INVALID_VILLAGE_SELECTION: 'Invalid village or selection. Please choose a number or type the village name:',
     MANY_GATS_HINT: 'Showing the first {{shown}} of {{total}} fields. You can also type your Gat number directly.',
 
     // ---- Farm action hub ----

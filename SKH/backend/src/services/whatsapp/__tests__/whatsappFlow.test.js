@@ -17,13 +17,13 @@ const twoFarms = { associatedGats: [GAT_A, GAT_B] };
 
 describe('whatsappFlow', () => {
   describe('language', () => {
-    it('should answer a session with no stored language in Marathi, with no language menu and prompt for village', () => {
+    it('should answer a session with no stored language in Marathi, with no language menu and prompt for division', () => {
       const result = processFlow({ state: STATES.START }, text('hi'), oneFarm);
 
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].WELCOME);
       expect(result.replyText).not.toContain('1. मराठी');
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
-      expect(result.replyText).toContain('मुर्शदपूर');
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DIVISION_SELECTION);
+      expect(result.replyText).toContain('नाशिक');
     });
 
     it('should switch language on a keyword and re-ask the question it interrupted', () => {
@@ -43,7 +43,7 @@ describe('whatsappFlow', () => {
 
       expect(result.farmerUpdates).toEqual({ preferredLanguage: LANGUAGES.HI });
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.HI].LANGUAGE_SWITCHED);
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DIVISION_SELECTION);
     });
 
     it('should not read a language keyword inside a longer message as a switch', () => {
@@ -56,25 +56,69 @@ describe('whatsappFlow', () => {
     });
   });
 
-  describe('village and farm selection', () => {
-    it('should open the conversation at village selection', () => {
+  describe('hierarchical administrative and farm selection', () => {
+    it('should open the conversation at division selection', () => {
       const result = processFlow({ state: STATES.START }, text('hi'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
-      expect(result.replyText).toContain('मुर्शदपूर');
-      expect(result.replyText).toContain('पिंपळगाव बसवंत');
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DIVISION_SELECTION);
+      expect(result.replyText).toContain('नाशिक');
+      expect(result.replyText).toContain('पुणे');
     });
 
-    it('should accept village selection by row index (e.g. 1 for Murshatpur)', () => {
-      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+    it('should accept division selection and advance to district selection', () => {
+      const session = { state: STATES.WAITING_FOR_DIVISION_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('1'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DISTRICT_SELECTION);
+      expect(result.updatedSessionData.selectedDivision).toBe('NASHIK');
+      expect(result.replyText).toContain('नाशिक');
+    });
+
+    it('should accept district selection and advance to taluka selection', () => {
+      const session = {
+        state: STATES.WAITING_FOR_DISTRICT_SELECTION,
+        selectedDivision: 'NASHIK',
+        language: LANGUAGES.MR
+      };
+      const result = processFlow(session, text('1'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_TALUKA_SELECTION);
+      expect(result.updatedSessionData.selectedDistrict).toBe('Nashik');
+      expect(result.replyText).toContain('निफाड');
+    });
+
+    it('should accept taluka selection and advance to village selection', () => {
+      const session = {
+        state: STATES.WAITING_FOR_TALUKA_SELECTION,
+        selectedDistrict: 'Nashik',
+        language: LANGUAGES.MR
+      };
+      const result = processFlow(session, text('1'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.updatedSessionData.selectedTaluka).toBe('Niphad');
+      expect(result.replyText).toContain('मुर्शदपूर');
+    });
+
+    it('should accept village selection and advance to Gat selection', () => {
+      const session = {
+        state: STATES.WAITING_FOR_VILLAGE_SELECTION,
+        selectedTaluka: 'Niphad',
+        language: LANGUAGES.MR
+      };
       const result = processFlow(session, text('1'), oneFarm);
 
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
       expect(result.updatedSessionData.selectedVillage).toBe('Murshatpur');
+      expect(result.replyText).toContain('101');
     });
 
     it('should accept village selection by English village name', () => {
-      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const session = {
+        state: STATES.WAITING_FOR_VILLAGE_SELECTION,
+        selectedTaluka: 'Niphad',
+        language: LANGUAGES.MR
+      };
       const result = processFlow(session, text('Ozar'), oneFarm);
 
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
@@ -82,7 +126,11 @@ describe('whatsappFlow', () => {
     });
 
     it('should accept village selection by Marathi village name', () => {
-      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const session = {
+        state: STATES.WAITING_FOR_VILLAGE_SELECTION,
+        selectedTaluka: 'Niphad',
+        language: LANGUAGES.MR
+      };
       const result = processFlow(session, text('पिंपळगाव बसवंत'), oneFarm);
 
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
@@ -95,13 +143,6 @@ describe('whatsappFlow', () => {
 
       expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].INVALID_VILLAGE_SELECTION);
-    });
-
-    it('should list the farms of a farmer with several Gats in Gat selection', () => {
-      const session = { state: STATES.WAITING_FOR_GAT_SELECTION, language: LANGUAGES.MR };
-      const result = processFlow(session, text('hi'), twoFarms, { gats: [GAT_A, GAT_B] });
-
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
     });
 
     it('should accept a farm selected by its row number', () => {
@@ -130,23 +171,6 @@ describe('whatsappFlow', () => {
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].INVALID_GAT_SELECTION);
       expect(result.replyText).toContain('1. गट 101 — शिरूर');
-    });
-
-    it('should narrow the farm list to the chosen village', () => {
-      const many = {
-        associatedGats: [
-          { _id: 'g1', gatNumber: '201', village: 'शिरूर' },
-          { _id: 'g2', gatNumber: '202', village: 'बारामती' },
-        ],
-      };
-      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
-
-      const result = processFlow(session, text('बारामती'), many, { villages: ['शिरूर', 'बारामती'] });
-
-      expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
-      expect(result.updatedSessionData.selectedVillage).toBe('बारामती');
-      expect(result.replyText).toContain('1. गट 202 — बारामती');
-      expect(result.replyText).not.toContain('201');
     });
   });
 
@@ -591,7 +615,7 @@ describe('whatsappFlow', () => {
 
       const result = processFlow(session, text('start'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DIVISION_SELECTION);
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].WELCOME);
     });
 
@@ -609,7 +633,7 @@ describe('whatsappFlow', () => {
 
       const result = processFlow(session, text('1'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_DIVISION_SELECTION);
     });
   });
 });

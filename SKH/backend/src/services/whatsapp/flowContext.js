@@ -31,7 +31,13 @@ const AREA_AWARE_STATES = [
   STATES.WAITING_FOR_AREA,
 ];
 
-const { getFeaturedVillages } = require('../../data/maharashtraData');
+const {
+  getDivisions,
+  getDistricts,
+  getTalukas,
+  getVillagesInTaluka,
+  getFeaturedVillages
+} = require('../../data/maharashtraData');
 
 /**
  * Resolve the selected Gat without a query where possible.
@@ -74,11 +80,17 @@ async function buildFlowContext(session, farmer = null) {
     }
   }
 
-  const featuredVillages = getFeaturedVillages();
+  const divisions = getDivisions();
+  const districts = getDistricts(session?.selectedDivision);
+  const talukas = getTalukas(session?.selectedDistrict);
+  const villages = session?.selectedTaluka ? getVillagesInTaluka(session.selectedTaluka) : getFeaturedVillages();
 
   const context = {
     gats,
-    villages: featuredVillages,
+    divisions,
+    districts,
+    talukas,
+    villages,
     gat: null,
     otherActiveArea: 0,
     remainingArea: null,
@@ -116,6 +128,7 @@ async function buildFlowContext(session, farmer = null) {
 
 module.exports = {
   buildFlowContext,
+  resolveGat,
   HISTORY_LIMIT,
   AREA_AWARE_STATES,
 };

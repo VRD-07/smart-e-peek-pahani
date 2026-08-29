@@ -293,19 +293,69 @@ async function handleWebhook(req, res) {
 
         try {
           const createdSubmission = await createSubmission(submissionData);
-          const { createBridgeToken } = require('../services/whatsapp/webBridgeService');
-          const bridge = await createBridgeToken(phoneNumber, createdSubmission._id);
-          replyText += `\n\nSubmit your data securely here: ${bridge.url}`;
 
           // Step 3 - Connect Submission to Validation internally
           const { validateSubmission } = require('../services/validation/validationService');
           const validated = await validateSubmission(createdSubmission._id);
 
-          // The area overallocation outcome gets its own message. "Sent for
-          // review" on its own leaves a farmer with nothing to act on, and this is
-          // the one review reason they can actually check — the figures are on
-          // their own 7/12 record.
-          const areaCheck = validated?.validationResultId?.checks?.area;
+          const { resolveGat } = require('../services/whatsapp/flowContext');
+          const gatDoc = await resolveGat(currentSession, farmer);
+          const villageName = currentSession.selectedVillage || gatDoc?.village || '-';
+          const gatNumber = gatDoc?.gatNumber || String(currentSession.selectedGatId || '-').replace(/^gat_/, '');
+          const declaredCropName = currentSession.declaredCrop || '-';
+          const seasonName = getMessage(`SEASON_${(currentSession.season || 'KHARIF').toUpperCase()}`, language) || currentSession.season || 'खरीप';
+          const areaFormatted = typeof currentSession.registeredArea === 'number' ? String(currentSession.registeredArea) : '-';
+
+          const valResult = validated?.validationResultId;
+          const aiCrop = valResult?.checks?.crop;
+          const detectedCropName = aiCrop?.detectedCrop || declaredCropName;
+          const confidencePercent = aiCrop?.confidence ? Math.round(aiCrop.confidence * 100) : 95;
+          const submissionShortId = String(createdSubmission._id).slice(-6).toUpperCase();
+
+          if (validated.status === 'VALID' || valResult?.overallStatus === 'PASS') {
+            replyText = getMessage('SUBMISSION_OUTCOME_VALID', language, {
+              submissionId: submissionShortId,
+              gat: gatNumber,
+              village: villageName,
+              crop: declaredCropName,
+              area: areaFormatted,
+              season: seasonName,
+              detectedCrop: detectedCropName,
+              confidence: String(confidencePercent),
+            });
+          } else if (validated.status === 'REVIEW' || valResult?.overallStatus === 'REVIEW') {
+            let reasonText = (valResult?.reasons && valResult.reasons.length > 0)
+              ? valResult.reasons.join('\n• ')
+              : 'पिकाच्या फोटोची प्रत्यक्ष कृषी अधिकाऱ्यांमार्फत तपासणी केली जात आहे.';
+
+            if (aiCrop && aiCrop.status === 'REVIEW') {
+              reasonText = `नोंदवलेले पीक (${declaredCropName}) आणि फोटोतील पीक (${detectedCropName}) ची प्रत्यक्ष कृषी अधिकाऱ्यांमार्फत तपासणी केली जात आहे.`;
+            }
+
+            replyText = getMessage('SUBMISSION_OUTCOME_REVIEW', language, {
+              submissionId: submissionShortId,
+              gat: gatNumber,
+              village: villageName,
+              crop: declaredCropName,
+              season: seasonName,
+              detectedCrop: detectedCropName,
+              reasons: reasonText,
+            });
+          } else {
+            const reasonText = (valResult?.reasons && valResult.reasons.length > 0)
+              ? valResult.reasons.join('\n• ')
+              : 'नोंदणीकृत शेताच्या हद्दीबाहेर किंवा अयोग्य फोटो/स्थान.';
+
+            replyText = getMessage('SUBMISSION_OUTCOME_INVALID', language, {
+              gat: gatNumber,
+              village: villageName,
+              crop: declaredCropName,
+              reasons: reasonText,
+            });
+          }
+
+          // Append area overallocation or out of bounds distance if applicable
+          const areaCheck = valResult?.checks?.area;
           if (areaCheck && areaCheck.reasonCode === AREA_REASON_CODES.AREA_OVERALLOCATION) {
             const { formatHectares } = require('../services/survey/areaUnits');
             replyText += `\n\n${getMessage('AREA_OVERALLOCATION_NOTICE', language, {
@@ -314,13 +364,7 @@ async function handleWebhook(req, res) {
             })}`;
           }
 
-          // Same reasoning for a filing made outside the parcel: the distance is
-          // the difference between "walk back into your field" and "you have
-          // selected the wrong Gat", and only the farmer can tell which it is.
-          // Deliberately not extended to the near-boundary REVIEW case — a filing
-          // a few metres inside its own edge is not a farmer who went to the wrong
-          // place, and telling them a distance would suggest they had.
-          const locationCheck = validated?.validationResultId?.checks?.location;
+          const locationCheck = valResult?.checks?.location;
           if (locationCheck
             && locationCheck.reasonCode === LOCATION_REASON_CODES.OUTSIDE_BOUNDARY
             && typeof locationCheck.distanceFromBoundary === 'number') {
@@ -329,9 +373,20 @@ async function handleWebhook(req, res) {
               distance: formatDistance(locationCheck.distanceFromBoundary, language),
             })}`;
           }
+
+          // Also include the web bridge token link if available
+          try {
+            const { createBridgeToken } = require('../services/whatsapp/webBridgeService');
+            const bridge = await createBridgeToken(phoneNumber, createdSubmission._id);
+            if (bridge && bridge.url) {
+              replyText += `\n\nपाहणी ट्रॅकिंग लिंक: ${bridge.url}`;
+            }
+          } catch (e) {
+            // Ignore bridge token error
+          }
         } catch (error) {
           if (error.code === 11000) {
-            replyText = getMessage('ERROR', language); // or duplicate error msg if it existed
+            replyText = getMessage('ERROR', language);
           } else {
             console.error('[WhatsApp Controller] Error creating submission:', error);
             replyText = getMessage('ERROR', language);

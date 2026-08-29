@@ -155,7 +155,7 @@ async function sendOnChannel({
     // The audit row keeps the TwiML, not a transcript: it is the exact document
     // Twilio was asked to play, which is the auditable artefact.
     recordedBody = twiml;
-    result = await provider.placeVoiceCall(to, twiml);
+    result = await provider.placeVoiceCall(to, twiml, { type });
   }
 
   const providerId = result.messageId || result.callId;
