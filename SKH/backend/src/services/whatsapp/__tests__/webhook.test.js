@@ -122,32 +122,47 @@ describe('WhatsApp Webhook Integration', () => {
       expect(session).toBeDefined();
     });
 
-    it('should preserve session state across multiple requests (Start -> Action -> Season)', async () => {
+    it('should preserve session state across multiple requests (Start -> Village -> Gat -> Action -> Season)', async () => {
       const sender = 'whatsapp:+2222222222';
 
       const Farmer = require('../../../models/Farmer');
       const Gat = require('../../../models/Gat');
       const gat = await Gat.create({
         gatNumber: '111',
-        village: 'V',
-        district: 'D',
+        village: 'Murshatpur',
+        district: 'Nashik',
         boundary: { type: 'Polygon', coordinates: [[[0,0],[0,10],[10,10],[10,0],[0,0]]] },
         center: { latitude: 5, longitude: 5 }
       });
       await Farmer.create({ name: 'Test', phoneNumber: sender, associatedGats: [gat._id] });
 
-      // Request 1: Start -> advances single Gat farmer to WAITING_FOR_ACTION
-      await request(app)
+      // Request 1: Start -> opens at WAITING_FOR_VILLAGE_SELECTION
+      const res1 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: 'hi' });
+      expect(res1.status).toBe(200);
 
-      // Request 2: Select "1" (Register Crop) -> advances to WAITING_FOR_SEASON
+      // Request 2: Select "1" (Murshatpur) -> advances to WAITING_FOR_GAT_SELECTION
       const res2 = await request(app)
         .post('/api/whatsapp/webhook')
         .send({ From: sender, Body: '1' });
-
       expect(res2.status).toBe(200);
-      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SEASON);
+      expect(res2.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_GAT_SELECTION);
+
+      // Request 3: Select "1" (Gat 111) -> advances to WAITING_FOR_ACTION
+      const res3 = await request(app)
+        .post('/api/whatsapp/webhook')
+        .send({ From: sender, Body: '1' });
+      expect(res3.status).toBe(200);
+      expect(res3.text).toContain(DICTIONARY[LANGUAGES.MR].ACTION_REGISTER_CROP);
+
+      // Request 4: Select "1" (Register Crop) -> advances to WAITING_FOR_SEASON
+      const res4 = await request(app)
+        .post('/api/whatsapp/webhook')
+        .send({ From: sender, Body: '1' });
+
+      expect(res4.status).toBe(200);
+      expect(res4.text).toContain(DICTIONARY[LANGUAGES.MR].ASK_SEASON);
 
       // Verify DB state
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });

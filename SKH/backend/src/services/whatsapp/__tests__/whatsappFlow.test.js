@@ -17,13 +17,13 @@ const twoFarms = { associatedGats: [GAT_A, GAT_B] };
 
 describe('whatsappFlow', () => {
   describe('language', () => {
-    it('should answer a session with no stored language in Marathi, with no language menu', () => {
+    it('should answer a session with no stored language in Marathi, with no language menu and prompt for village', () => {
       const result = processFlow({ state: STATES.START }, text('hi'), oneFarm);
 
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].WELCOME);
-      // The old flow asked "1 Marathi / 2 Hindi / 3 English" here.
       expect(result.replyText).not.toContain('1. मराठी');
-      expect(result.nextState).toBe(STATES.WAITING_FOR_ACTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.replyText).toContain('मुर्शदपूर');
     });
 
     it('should switch language on a keyword and re-ask the question it interrupted', () => {
@@ -43,6 +43,7 @@ describe('whatsappFlow', () => {
 
       expect(result.farmerUpdates).toEqual({ preferredLanguage: LANGUAGES.HI });
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.HI].LANGUAGE_SWITCHED);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
     });
 
     it('should not read a language keyword inside a longer message as a switch', () => {
@@ -55,35 +56,52 @@ describe('whatsappFlow', () => {
     });
   });
 
-  describe('farm selection', () => {
-    it('should send a farmer with one Gat straight to the action hub', () => {
+  describe('village and farm selection', () => {
+    it('should open the conversation at village selection', () => {
       const result = processFlow({ state: STATES.START }, text('hi'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_ACTION);
-      expect(result.updatedSessionData.selectedGatId).toBe('gatA');
-      expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].ACTION_REGISTER_CROP);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.replyText).toContain('मुर्शदपूर');
+      expect(result.replyText).toContain('पिंपळगाव बसवंत');
     });
 
-    it('should tell an unregistered number it is not registered', () => {
-      const result = processFlow({ state: STATES.START }, text('hi'), null);
-
-      expect(result.nextState).toBe(STATES.START);
-      expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].UNREGISTERED_FARMER);
-    });
-
-    it('should tell a farmer with no linked Gat to complete their profile', () => {
-      const result = processFlow({ state: STATES.START }, text('hi'), { associatedGats: [] });
-
-      expect(result.nextState).toBe(STATES.START);
-      expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].MISSING_GAT);
-    });
-
-    it('should list the farms of a farmer with several Gats', () => {
-      const result = processFlow({ state: STATES.START }, text('hi'), twoFarms);
+    it('should accept village selection by row index (e.g. 1 for Murshatpur)', () => {
+      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('1'), oneFarm);
 
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
-      expect(result.replyText).toContain('1. गट 101 — शिरूर');
-      expect(result.replyText).toContain('2. गट 102 — शिरूर');
+      expect(result.updatedSessionData.selectedVillage).toBe('Murshatpur');
+    });
+
+    it('should accept village selection by English village name', () => {
+      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('Ozar'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
+      expect(result.updatedSessionData.selectedVillage).toBe('Ozar');
+    });
+
+    it('should accept village selection by Marathi village name', () => {
+      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('पिंपळगाव बसवंत'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
+      expect(result.updatedSessionData.selectedVillage).toBe('Pimpalgaon Baswant');
+    });
+
+    it('should re-ask on an unreadable village selection', () => {
+      const session = { state: STATES.WAITING_FOR_VILLAGE_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('xyzunknown'), oneFarm);
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
+      expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].INVALID_VILLAGE_SELECTION);
+    });
+
+    it('should list the farms of a farmer with several Gats in Gat selection', () => {
+      const session = { state: STATES.WAITING_FOR_GAT_SELECTION, language: LANGUAGES.MR };
+      const result = processFlow(session, text('hi'), twoFarms, { gats: [GAT_A, GAT_B] });
+
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
     });
 
     it('should accept a farm selected by its row number', () => {
@@ -112,22 +130,6 @@ describe('whatsappFlow', () => {
       expect(result.nextState).toBe(STATES.WAITING_FOR_GAT_SELECTION);
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].INVALID_GAT_SELECTION);
       expect(result.replyText).toContain('1. गट 101 — शिरूर');
-    });
-
-    it('should ask for the village first when a farmer has more Gats than a list can hold', () => {
-      const many = {
-        associatedGats: Array.from({ length: 12 }, (unused, index) => ({
-          _id: `gat${index}`,
-          gatNumber: String(200 + index),
-          village: index < 6 ? 'शिरूर' : 'बारामती',
-        })),
-      };
-
-      const result = processFlow({ state: STATES.START }, text('hi'), many);
-
-      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
-      expect(result.replyText).toContain('1. शिरूर');
-      expect(result.replyText).toContain('2. बारामती');
     });
 
     it('should narrow the farm list to the chosen village', () => {
@@ -589,7 +591,7 @@ describe('whatsappFlow', () => {
 
       const result = processFlow(session, text('start'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_ACTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
       expect(result.replyText).toContain(DICTIONARY[LANGUAGES.MR].WELCOME);
     });
 
@@ -607,7 +609,7 @@ describe('whatsappFlow', () => {
 
       const result = processFlow(session, text('1'), oneFarm);
 
-      expect(result.nextState).toBe(STATES.WAITING_FOR_ACTION);
+      expect(result.nextState).toBe(STATES.WAITING_FOR_VILLAGE_SELECTION);
     });
   });
 });

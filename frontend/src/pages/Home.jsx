@@ -1,10 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, ChevronRight, CheckCircle2, Building2 } from 'lucide-react';
+import {
+  MapPin,
+  ChevronRight,
+  CheckCircle2,
+  Building2,
+  Sprout,
+  ShieldCheck,
+  Smartphone,
+  WifiOff,
+  Sparkles,
+  ArrowRight,
+  LogOut
+} from 'lucide-react';
 import { MAHARASHTRA_DIVISIONS } from '../data/maharashtraData';
+import heroFarmerImg from '../assets/hero_farmer.jpg';
 
 export const Home = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('smart_e_peek_token');
 
   // Load existing or default to Nashik -> Nashik -> Niphad -> Murshatpur
   const savedLocation = JSON.parse(localStorage.getItem('smart_e_peek_location') || '{}');
@@ -38,34 +52,110 @@ export const Home = () => {
     navigate('/login', { state: { selectedLocation: locationData } });
   };
 
+  const handleDirectSurvey = () => {
+    navigate('/onboarding');
+  };
+
   return (
-    <div className="flex flex-col flex-1 max-w-md mx-auto w-full p-4 pb-28">
-      {/* Maharashtra Gov Header Banner */}
-      <div className="bg-gradient-to-r from-emerald-800 to-primary-900 rounded-3xl p-5 text-white shadow-lg mb-5 border border-emerald-600/30">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 flex-shrink-0">
-            <Building2 className="w-6 h-6 text-amber-300" />
+    <div className="flex flex-col flex-1 max-w-md mx-auto w-full p-4 pb-28 space-y-4 font-sans">
+      
+      {/* Hero Banner with Official Farmer Image */}
+      <div className="relative rounded-3xl overflow-hidden shadow-xl border border-emerald-500/30 bg-slate-950 group">
+        <img
+          src={heroFarmerImg}
+          alt="Maharashtra Farmer Smart E-Peek"
+          className="w-full h-48 sm:h-52 object-cover object-top opacity-90 transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent flex flex-col justify-end p-4 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-700/80 backdrop-blur-sm text-emerald-200 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+              महाराष्ट्र शासन महसूल विभाग
+            </span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-300">महाराष्ट्र शासन महसूल विभाग</span>
-            <h1 className="text-xl font-extrabold text-white leading-tight">स्मार्ट ई-पीक पाहणी</h1>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-white leading-tight drop-shadow-md">
+            स्मार्ट ई-पीक पाहणी
+          </h1>
+          <p className="text-xs text-emerald-200 font-medium drop-shadow mt-0.5">
+            अचूक डिजिटल पीक नोंदणी • प्रत्यक्ष शेतातील जिओ-टॅगिंग व ७/१२ नोंद
+          </p>
         </div>
-        <p className="text-xs text-emerald-100/90 mt-1">
-          डिजिटल पीक नोंदणी • प्रत्यक्ष शेतातील जिओ-टॅगिंग व अचूक ७/१२ नोंद
-        </p>
       </div>
 
-      {/* Step 1 Card */}
+      {/* Feature Highlights Ribbon */}
+      <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
+        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-1">
+          <Sparkles className="w-4 h-4 text-emerald-600" />
+          <span className="font-bold text-gray-800">AI पीक ओळख</span>
+        </div>
+        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-1">
+          <MapPin className="w-4 h-4 text-blue-600" />
+          <span className="font-bold text-gray-800">GPS जिओ-फेन्स</span>
+        </div>
+        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-1">
+          <WifiOff className="w-4 h-4 text-amber-600" />
+          <span className="font-bold text-gray-800">ऑफलाइन काम</span>
+        </div>
+        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-1">
+          <Smartphone className="w-4 h-4 text-purple-600" />
+          <span className="font-bold text-gray-800">व्हॉट्सअ‍ॅप बॉट</span>
+        </div>
+      </div>
+
+      {/* If farmer is already logged in: Show Quick Access Hub */}
+      {token && (
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-5 text-white shadow-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sprout className="w-5 h-5 text-amber-300" />
+              <span className="font-bold text-sm">आपले खाते सक्रिय आहे</span>
+            </div>
+            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
+              लॉगिन झाले
+            </span>
+          </div>
+
+          <p className="text-xs text-emerald-100">
+            आपण थेट आपल्या शेतातील पिकाची नोंदणी सुरू करू शकता.
+          </p>
+
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={handleDirectSurvey}
+              className="w-full py-3 px-4 bg-white hover:bg-emerald-50 text-emerald-800 font-extrabold rounded-2xl text-xs shadow-md transition-all flex items-center justify-between"
+            >
+              <span className="flex items-center gap-2">
+                <Sprout className="w-4 h-4 text-emerald-600" />
+                🌱 थेट पीक नोंदणी सुरू करा (Start Survey)
+              </span>
+              <ArrowRight className="w-4 h-4 text-emerald-600" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/offline')}
+              className="w-full py-2.5 px-4 bg-emerald-800/60 hover:bg-emerald-800/80 text-white font-semibold rounded-2xl text-xs transition-all flex items-center justify-between"
+            >
+              <span className="flex items-center gap-2">
+                <WifiOff className="w-3.5 h-3.5" />
+                ऑफलाइन रांग व नोंदी पहा (Offline Queue)
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-emerald-300" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 1 Card: Location Selection */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">
+            <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
               १
             </div>
-            <h2 className="font-bold text-gray-900 text-sm">आपले महसूल स्थान निवडा (Select Location)</h2>
+            <h2 className="font-bold text-gray-900 text-sm">महसूल स्थान निवडा (Select Location)</h2>
           </div>
-          <span className="text-[11px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
+          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full">
             पायरी १/३
           </span>
         </div>
@@ -88,7 +178,7 @@ export const Home = () => {
                 setSelectedTalukaId(tal?.id || '');
                 setSelectedVillageName(vil?.name || '');
               }}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all text-xs"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-xs"
             >
               {MAHARASHTRA_DIVISIONS.map(d => (
                 <option key={d.id} value={d.id}>{d.nameMr} ({d.name})</option>
@@ -112,7 +202,7 @@ export const Home = () => {
                 setSelectedTalukaId(tal?.id || '');
                 setSelectedVillageName(vil?.name || '');
               }}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all text-xs disabled:opacity-50"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-xs disabled:opacity-50"
             >
               {currentDivision?.districts.map(dist => (
                 <option key={dist.id} value={dist.id}>{dist.nameMr} ({dist.name})</option>
@@ -134,7 +224,7 @@ export const Home = () => {
                 const vil = tal?.villages[0];
                 setSelectedVillageName(vil?.name || '');
               }}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all text-xs disabled:opacity-50"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-xs disabled:opacity-50"
             >
               {currentDistrict?.talukas.map(tal => (
                 <option key={tal.id} value={tal.id}>{tal.nameMr} ({tal.name})</option>
@@ -151,7 +241,7 @@ export const Home = () => {
               value={selectedVillageName}
               disabled={!selectedTalukaId}
               onChange={(e) => setSelectedVillageName(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all text-xs disabled:opacity-50"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-xs disabled:opacity-50"
             >
               {currentTaluka?.villages.map(v => (
                 <option key={v.name} value={v.name}>{v.nameMr} ({v.name})</option>
@@ -185,7 +275,7 @@ export const Home = () => {
             onClick={handleProceed}
             className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
           >
-            <span>पुढे जा (Continue to Login / Registration)</span>
+            <span>पुढे जा (Continue to Login / Register)</span>
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
@@ -193,3 +283,4 @@ export const Home = () => {
     </div>
   );
 };
+

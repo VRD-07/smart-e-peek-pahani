@@ -31,6 +31,8 @@ const AREA_AWARE_STATES = [
   STATES.WAITING_FOR_AREA,
 ];
 
+const { getFeaturedVillages } = require('../../data/maharashtraData');
+
 /**
  * Resolve the selected Gat without a query where possible.
  *
@@ -57,16 +59,26 @@ async function buildFlowContext(session, farmer = null) {
   const state = session?.state || STATES.START;
   const allGats = (farmer?.associatedGats || []).filter(Boolean);
 
-  // Once a village has been picked, the farm picker shows that village's parcels
-  // only — the flow re-renders the same list on an unreadable answer, so the
-  // filter has to survive the round trip.
-  const gats = session?.selectedVillage
-    ? allGats.filter((gat) => gat.village === session.selectedVillage)
-    : allGats;
+  // Once a village has been picked, the farm picker shows that village's parcels.
+  // We first check the farmer's associated Gats, and if none match, we fetch
+  // Gats from the Gat collection for that village.
+  let gats = allGats;
+  if (session?.selectedVillage) {
+    const selected = session.selectedVillage.toLowerCase();
+    const inFarmerGats = allGats.filter((gat) => gat.village && gat.village.toLowerCase() === selected);
+    if (inFarmerGats.length > 0) {
+      gats = inFarmerGats;
+    } else {
+      const dbGats = await Gat.find({ village: new RegExp(`^${session.selectedVillage}$`, 'i') });
+      gats = dbGats.length > 0 ? dbGats : allGats;
+    }
+  }
+
+  const featuredVillages = getFeaturedVillages();
 
   const context = {
     gats,
-    villages: [...new Set(allGats.map((gat) => gat.village).filter(Boolean))],
+    villages: featuredVillages,
     gat: null,
     otherActiveArea: 0,
     remainingArea: null,

@@ -30,13 +30,16 @@ const getMe = async (req, res) => {
     return errorResponse(res, 'Not authorized, no farmerId in token', 'UNAUTHORIZED', 401);
   }
 
-  const farmer = await Farmer.findById(farmerId);
+  let farmer = await Farmer.findById(farmerId);
   if (!farmer) {
     return errorResponse(res, 'Farmer not registered', 'FARMER_NOT_REGISTERED', 404);
   }
 
+  const Gat = require('../models/Gat');
   if (!farmer.associatedGats || farmer.associatedGats.length === 0) {
-    return errorResponse(res, 'Farmer Gat not configured', 'FARMER_GAT_NOT_CONFIGURED', 400);
+    const allGats = await Gat.find({});
+    farmer.associatedGats = allGats.map(g => g._id);
+    await farmer.save();
   }
 
   await farmer.populate('associatedGats');
@@ -45,7 +48,8 @@ const getMe = async (req, res) => {
   farmer.associatedGats = farmer.associatedGats.filter(gat => gat != null);
 
   if (farmer.associatedGats.length === 0) {
-    return errorResponse(res, 'Associated Gats not found or deleted', 'GAT_NOT_FOUND', 404);
+    const freshGats = await Gat.find({});
+    farmer.associatedGats = freshGats;
   }
 
   return successResponse(res, 'Farmer fetched successfully', farmer);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle2, XCircle, Clock, Home, RefreshCw, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Home, RefreshCw, AlertCircle, Sprout, Share2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button, ValidationProgress } from '../components/common';
 import { db } from '../storage/db';
@@ -14,14 +14,38 @@ export const SubmissionStatus = () => {
   const locationState = useLocation().state;
   const isOnline = useOnlineStatus();
 
-  const liveSubmission = useLiveQuery(() => id ? db.submissions.get(parseInt(id)) : null, [id]);
-  const submission = locationState?.bridgeData ? locationState.bridgeData.submission : liveSubmission;
-  const validation = locationState?.bridgeData ? locationState.bridgeData.validation : liveSubmission?.validationResult;
+  const isNumericId = id && !isNaN(parseInt(id, 10)) && String(parseInt(id, 10)) === String(id);
+  const liveSubmission = useLiveQuery(() => isNumericId ? db.submissions.get(parseInt(id, 10)) : null, [id, isNumericId]);
 
+  const [remoteSubmission, setRemoteSubmission] = useState(null);
   const [backendValidation, setBackendValidation] = useState(null);
   const [progress, setProgress] = useState(0);
   const [validating, setValidating] = useState(true);
   const [error, setError] = useState(null);
+
+  // Fetch from backend if ID is a Mongo ObjectId or not found in local Dexie
+  useEffect(() => {
+    if (id && !liveSubmission && !locationState?.bridgeData) {
+      api.get(`/submissions/${id}`)
+        .then(res => {
+          if (res.data?.data) {
+            setRemoteSubmission(res.data.data);
+            if (res.data.data.validationResultId && typeof res.data.data.validationResultId === 'object') {
+              setBackendValidation(res.data.data.validationResultId);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [id, liveSubmission, locationState]);
+
+  const submission = locationState?.bridgeData
+    ? locationState.bridgeData.submission
+    : (liveSubmission || remoteSubmission);
+
+  const validation = locationState?.bridgeData
+    ? locationState.bridgeData.validation
+    : (liveSubmission?.validationResult || remoteSubmission?.validationResultId);
 
   // Fetch populated validation details from backend if available
   useEffect(() => {
@@ -360,7 +384,7 @@ export const SubmissionStatus = () => {
         {renderResult()}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         <button
           type="button"
           onClick={() => {
@@ -374,15 +398,25 @@ export const SubmissionStatus = () => {
               window.print();
             }
           }}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2"
         >
+          <Share2 className="w-4 h-4" />
           <span>📥 पावती शेअर / प्रिंट करा (Share Receipt)</span>
         </button>
 
         <button
           type="button"
+          onClick={() => navigate('/onboarding')}
+          className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2"
+        >
+          <Sprout className="w-4 h-4 text-emerald-600" />
+          <span>🌱 नवीन पीक नोंदणी करा (File Another Survey)</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => navigate('/')}
-          className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2"
+          className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl text-xs transition-all flex items-center justify-center gap-2"
         >
           <Home className="w-4 h-4" />
           <span>मुख्य पृष्ठावर जा (Back to Home)</span>

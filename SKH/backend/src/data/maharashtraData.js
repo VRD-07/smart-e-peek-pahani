@@ -1924,4 +1924,76 @@ const MAHARASHTRA_DIVISIONS = [
   }
 ];
 
-module.exports = { MAHARASHTRA_DIVISIONS };
+function getAllVillages() {
+  const list = [];
+  for (const div of MAHARASHTRA_DIVISIONS) {
+    for (const dist of div.districts) {
+      for (const tal of dist.talukas) {
+        for (const v of tal.villages) {
+          list.push({
+            name: v.name,
+            nameMr: v.nameMr,
+            defaultGats: v.defaultGats || ['101', '102', '103', '104', '105', '106'],
+            taluka: tal.name,
+            talukaMr: tal.nameMr,
+            district: dist.name,
+            districtMr: dist.nameMr,
+            division: div.name,
+            divisionMr: div.nameMr
+          });
+        }
+      }
+    }
+  }
+  return list;
+}
+
+const FEATURED_VILLAGE_NAMES = [
+  'Murshatpur',
+  'Pimpalgaon Baswant',
+  'Ozar',
+  'Saykheda',
+  'Lasalgaon',
+  'Chandori',
+  'Ugav',
+  'Ranwad',
+  'Vinchur',
+  'Shirdi'
+];
+
+function getFeaturedVillages() {
+  const all = getAllVillages();
+  return FEATURED_VILLAGE_NAMES.map(name =>
+    all.find(v => v.name.toLowerCase() === name.toLowerCase()) || {
+      name,
+      nameMr: name,
+      defaultGats: ['101', '102', '103', '104', '105', '106']
+    }
+  );
+}
+
+function findVillage(query) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim().toLowerCase();
+  const all = getAllVillages();
+  // Exact match first
+  const exact = all.find(v =>
+    v.name.toLowerCase() === q ||
+    (v.nameMr && v.nameMr.trim().toLowerCase() === q)
+  );
+  if (exact) return exact;
+
+  // Substring match second
+  return all.find(v =>
+    v.name.toLowerCase().includes(q) ||
+    (v.nameMr && v.nameMr.includes(q))
+  ) || null;
+}
+
+module.exports = {
+  MAHARASHTRA_DIVISIONS,
+  getAllVillages,
+  getFeaturedVillages,
+  findVillage,
+  FEATURED_VILLAGE_NAMES
+};

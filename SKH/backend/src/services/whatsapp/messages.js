@@ -34,7 +34,8 @@ const DICTIONARY = {
     GAT_LABEL: 'गट {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'कृपया तुम्ही कोणत्या गटाची नोंदणी करत आहात ते निवडा:',
     INVALID_GAT_SELECTION: 'चुकीची निवड. कृपया योग्य क्रमांक पाठवा:',
-    ASK_VILLAGE_SELECTION: 'तुमची शेते अनेक गावांमध्ये आहेत. कृपया प्रथम गाव निवडा:',
+    ASK_VILLAGE_SELECTION: 'कृपया आपले गाव निवडा (किंवा गावाचे नाव थेट टाइप करा):',
+    INVALID_VILLAGE_SELECTION: 'चुकीचे गाव किंवा क्रमांक. कृपया यादीतील क्रमांक निवडा किंवा गावाचे नाव टाइप करा:',
     MANY_GATS_HINT: 'यादीत {{total}} पैकी पहिली {{shown}} शेते दिसत आहेत. तुमचा गट क्रमांक थेट टाइप करूनही निवडता येईल.',
 
     // ---- Farm action hub ----
@@ -163,7 +164,8 @@ const DICTIONARY = {
     GAT_LABEL: 'गट {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'कृपया चुनें कि आप किस गट की रिपोर्ट कर रहे हैं:',
     INVALID_GAT_SELECTION: 'अमान्य चयन। कृपया सही संख्या भेजें:',
-    ASK_VILLAGE_SELECTION: 'आपके खेत कई गाँवों में हैं। कृपया पहले गाँव चुनें:',
+    ASK_VILLAGE_SELECTION: 'कृपया अपना गाँव चुनें (या गाँव का नाम सीधे टाइप करें):',
+    INVALID_VILLAGE_SELECTION: 'अमान्य गाँव या संख्या। कृपया सूची में से संख्या चुनें या गाँव का नाम टाइप करें:',
     MANY_GATS_HINT: 'सूची में {{total}} में से पहले {{shown}} खेत दिख रहे हैं। आप अपना गट नंबर सीधे टाइप करके भी चुन सकते हैं।',
 
     // ---- Farm action hub ----
@@ -279,7 +281,8 @@ const DICTIONARY = {
     GAT_LABEL: 'Gat {{gat}} — {{village}}',
     ASK_GAT_SELECTION: 'Please select which field you want to report:',
     INVALID_GAT_SELECTION: 'Invalid selection. Please reply with a valid number:',
-    ASK_VILLAGE_SELECTION: 'Your fields are in more than one village. Please pick the village first:',
+    ASK_VILLAGE_SELECTION: 'Please select your village (or type the village name directly):',
+    INVALID_VILLAGE_SELECTION: 'Invalid village or selection. Please choose a number or type the village name:',
     MANY_GATS_HINT: 'Showing the first {{shown}} of {{total}} fields. You can also type your Gat number directly.',
 
     // ---- Farm action hub ----

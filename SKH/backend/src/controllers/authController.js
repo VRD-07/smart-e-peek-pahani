@@ -181,4 +181,5 @@ module.exports = {
   requestOtp,
   verifyOtp,
   officerLogin,
+  autoRegisterFarmer,
 };

@@ -36,6 +36,7 @@ const {
 const { CROP_CATEGORIES, cropsInCategory, cropLabel } = require('../crops/cropCatalogue');
 const { formatHectares } = require('../survey/areaUnits');
 const { formatSowingDate } = require('../survey/sowingDate');
+const { getFeaturedVillages } = require('../../data/maharashtraData');
 
 // How many worked examples a crop-name prompt shows for the chosen class. Enough
 // to make the class concrete, few enough that the farmer does not read it as the
@@ -208,19 +209,29 @@ function gatOption(gat, language) {
  * a truncated list that admits it, rather than one that silently ends at ten.
  */
 function gatSelectionPrompt(language, gats = [], context = {}) {
-  const shown = gats.slice(0, MAX_LIST_ROWS);
+  let list = gats && gats.length ? gats : (context.gats && context.gats.length ? context.gats : null);
+  if (!list || list.length === 0) {
+    const villageName = context.selectedVillage || 'Murshatpur';
+    list = ['101', '102', '103', '104', '105', '106'].map((num) => ({
+      _id: `gat_${num}`,
+      gatNumber: num,
+      village: villageName,
+      registeredArea: 1.2
+    }));
+  }
+  const shown = list.slice(0, MAX_LIST_ROWS);
   const bodyKey = context.invalid ? 'INVALID_GAT_SELECTION' : 'ASK_GAT_SELECTION';
   const lines = [getMessage(bodyKey, language)];
 
-  if (gats.length > shown.length) {
+  if (list.length > shown.length) {
     lines.push(getMessage('MANY_GATS_HINT', language, {
       shown: shown.length,
-      total: gats.length,
+      total: list.length,
     }));
   }
 
   // Every parcel stays matchable by its Gat number, including the hidden ones.
-  const hidden = gats.slice(MAX_LIST_ROWS).map((gat) => gatOption(gat, language));
+  const hidden = list.slice(MAX_LIST_ROWS).map((gat) => gatOption(gat, language));
 
   return listPrompt(
     lines.join('\n\n'),
@@ -229,14 +240,32 @@ function gatSelectionPrompt(language, gats = [], context = {}) {
   );
 }
 
-/** First tier of the two-tier farm picker: which village. */
-function villageSelectionPrompt(language, villages = []) {
-  const options = villages.slice(0, MAX_LIST_ROWS).map((village) => ({
-    key: village,
-    label: village,
-    keywords: [village],
-  }));
-  return listPrompt(getMessage('ASK_VILLAGE_SELECTION', language), options);
+/** First tier of the farm picker / initial step: which village. */
+function villageSelectionPrompt(language, villages = [], context = {}) {
+  let list = villages && villages.length ? villages : (context.villages && context.villages.length ? context.villages : null);
+  if (!list || list.length === 0) {
+    list = getFeaturedVillages();
+  }
+  const options = list.slice(0, MAX_LIST_ROWS).map((village) => {
+    if (typeof village === 'object' && village !== null) {
+      const label = village.nameMr && village.nameMr !== village.name
+        ? `${village.nameMr} (${village.name})`
+        : village.name;
+      return {
+        key: village.name,
+        label,
+        keywords: [village.name, village.nameMr, ...(village.keywords || [])].filter(Boolean),
+      };
+    }
+    return {
+      key: String(village),
+      label: String(village),
+      keywords: [String(village)],
+    };
+  });
+
+  const headingKey = context.invalid ? 'INVALID_VILLAGE_SELECTION' : 'ASK_VILLAGE_SELECTION';
+  return listPrompt(getMessage(headingKey, language), options);
 }
 
 /**
@@ -330,7 +359,7 @@ function plantingLocationPrompt(language) {
 function promptForState(state, language, context = {}) {
   switch (state) {
     case STATES.WAITING_FOR_VILLAGE_SELECTION:
-      return villageSelectionPrompt(language, context.villages);
+      return villageSelectionPrompt(language, context.villages, context);
     case STATES.WAITING_FOR_GAT_SELECTION:
       return gatSelectionPrompt(language, context.gats, context);
     case STATES.WAITING_FOR_ACTION:

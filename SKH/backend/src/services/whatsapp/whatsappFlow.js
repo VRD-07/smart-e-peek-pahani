@@ -53,6 +53,7 @@ const { WATER_SOURCES, SURVEY_ACTIONS, cropYear } = require('../survey/constants
 const { parseArea, formatHectares } = require('../survey/areaUnits');
 const { parseSowingDate } = require('../survey/sowingDate');
 const { cropCategory: categoryOfCrop } = require('../crops/cropCatalogue');
+const { getFeaturedVillages, findVillage } = require('../../data/maharashtraData');
 
 // Why a crop declaration did not land, and what to say about it. Voice and text
 // share this table because the failure is about the *words*, not the channel —
@@ -154,61 +155,27 @@ function plainReply(state, language, messageKey) {
 }
 
 /**
- * Show a farmer their farms, or the one farm they have.
+ * Initial step of the WhatsApp flow: Village Selection.
  *
- * Three shapes, chosen by how many parcels there are rather than by asking:
- * one parcel goes straight to the action hub, up to ten become a single list,
- * and beyond that the village is asked first — the two-tier pattern, because a
- * WhatsApp list holds ten rows and a farmer with fourteen parcels should not
- * have four of them silently disappear.
+ * Prompts the farmer to select their village from the active village list (with
+ * Marathi and English names), or type any Maharashtra village name directly.
  */
-function farmSelection(language, farmer, context, prefix = null) {
-  if (!farmer) {
-    return {
-      nextState: STATES.START,
-      replyText: joinParts(prefix, getMessage('UNREGISTERED_FARMER', language)),
-      updatedSessionData: { state: STATES.START },
-    };
-  }
-
-  const gats = (farmer.associatedGats || []).filter(Boolean);
-
-  if (!gats.length) {
-    return {
-      nextState: STATES.START,
-      replyText: joinParts(prefix, getMessage('MISSING_GAT', language)),
-      updatedSessionData: { state: STATES.START },
-    };
-  }
-
-  if (gats.length === 1) {
-    return advance(
-      STATES.WAITING_FOR_ACTION,
-      language,
-      { ...context, gat: gats[0] },
-      { selectedGatId: gats[0]._id, selectedVillage: null },
-      prefix,
-    );
-  }
-
-  const villages = [...new Set(gats.map((gat) => gat.village).filter(Boolean))];
-  if (gats.length > MAX_LIST_ROWS && villages.length > 1) {
-    return advance(
-      STATES.WAITING_FOR_VILLAGE_SELECTION,
-      language,
-      { ...context, villages },
-      { selectedVillage: null },
-      prefix,
-    );
-  }
+function villageSelection(language, farmer, context, prefix = null) {
+  const villages = (context && context.villages && context.villages.length)
+    ? context.villages
+    : getFeaturedVillages();
 
   return advance(
-    STATES.WAITING_FOR_GAT_SELECTION,
+    STATES.WAITING_FOR_VILLAGE_SELECTION,
     language,
-    { ...context, gats },
-    { selectedVillage: null },
+    { ...context, villages },
+    { selectedVillage: null, selectedGatId: null },
     prefix,
   );
+}
+
+function farmSelection(language, farmer, context, prefix = null) {
+  return villageSelection(language, farmer, context, prefix);
 }
 
 /**
@@ -280,6 +247,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
   const promptContext = {
     cropCategory: session.cropCategory || null,
     cropCandidates: session.pendingCropCandidates || [],
+    villages: (context && context.villages && context.villages.length) ? context.villages : getFeaturedVillages(),
     ...context,
   };
 
@@ -311,7 +279,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
         };
       }
 
-      const restarted = farmSelection(switched, farmer, promptContext, notice);
+      const restarted = villageSelection(switched, farmer, promptContext, notice);
       return {
         ...restarted,
         updatedSessionData: { ...restarted.updatedSessionData, language: switched },
@@ -320,7 +288,7 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
     }
 
     if (RESTART_KEYWORDS.includes(lowered)) {
-      return farmSelection(language, farmer, promptContext, getMessage('WELCOME', language));
+      return villageSelection(language, farmer, promptContext, getMessage('WELCOME', language));
     }
   }
 
@@ -330,29 +298,69 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
     // restart rather than answering a question nobody was asked.
     case STATES.START:
     case STATES.LANGUAGE_SELECTION:
-      return farmSelection(language, farmer, promptContext, getMessage('WELCOME', language));
+      return villageSelection(language, farmer, promptContext, getMessage('WELCOME', language));
 
     case STATES.WAITING_FOR_VILLAGE_SELECTION: {
       const prompt = promptForState(currentState, language, promptContext);
-      const chosen = parsedMessage.type === MESSAGE_TYPES.TEXT
-        ? matchOption(prompt, parsedMessage.data.text)
-        : null;
+      let chosenVillageName = null;
 
-      if (!chosen) return reask(currentState, language, promptContext);
+      if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
+        const chosen = matchOption(prompt, parsedMessage.data.text);
+        if (chosen) {
+          chosenVillageName = chosen.key;
+        } else {
+          const found = findVillage(parsedMessage.data.text);
+          if (found) {
+            chosenVillageName = found.name;
+          }
+        }
+      }
 
-      const inVillage = (farmer?.associatedGats || []).filter((gat) => gat.village === chosen.key);
+      if (!chosenVillageName) {
+        return reask(currentState, language, { ...promptContext, invalid: true }, 'INVALID_VILLAGE_SELECTION');
+      }
+
+      const allFarmerGats = farmer?.associatedGats || [];
+      const inVillage = allFarmerGats.filter((gat) => gat.village && gat.village.toLowerCase() === chosenVillageName.toLowerCase());
+      let gatsPool = inVillage.length > 0
+        ? inVillage
+        : ((promptContext.gats && promptContext.gats.length) ? promptContext.gats : allFarmerGats);
+
+      if (!gatsPool || gatsPool.length === 0) {
+        const found = findVillage(chosenVillageName);
+        const defNumbers = found?.defaultGats || ['101', '102', '103', '104', '105', '106'];
+        gatsPool = defNumbers.map((num) => ({
+          _id: `gat_${num}`,
+          gatNumber: num,
+          village: chosenVillageName,
+          registeredArea: 1.2
+        }));
+      }
+
       return advance(
         STATES.WAITING_FOR_GAT_SELECTION,
         language,
-        { ...promptContext, gats: inVillage },
-        { selectedVillage: chosen.key },
+        { ...promptContext, gats: gatsPool, selectedVillage: chosenVillageName },
+        { selectedVillage: chosenVillageName, selectedGatId: null },
       );
     }
 
     case STATES.WAITING_FOR_GAT_SELECTION: {
-      const pool = (promptContext.gats && promptContext.gats.length)
+      let pool = (promptContext.gats && promptContext.gats.length)
         ? promptContext.gats
         : (farmer?.associatedGats || []);
+
+      if ((!pool || pool.length === 0) && session.selectedVillage) {
+        const found = findVillage(session.selectedVillage);
+        const defNumbers = found?.defaultGats || ['101', '102', '103', '104', '105', '106'];
+        pool = defNumbers.map((num) => ({
+          _id: `gat_${num}`,
+          gatNumber: num,
+          village: session.selectedVillage,
+          registeredArea: 1.2
+        }));
+      }
+
       const prompt = promptForState(currentState, language, { ...promptContext, gats: pool });
       const chosen = parsedMessage.type === MESSAGE_TYPES.TEXT
         ? matchOption(prompt, parsedMessage.data.text)
@@ -367,17 +375,30 @@ function processFlow(currentSession, parsedMessage, farmer = null, context = {})
         );
       }
 
-      const gat = pool.find((candidate) => String(candidate._id) === chosen.key) || null;
+      const gat = pool.find((candidate) => String(candidate._id) === chosen.key || String(candidate.gatNumber) === chosen.key) || null;
       return advance(
         STATES.WAITING_FOR_ACTION,
         language,
         { ...promptContext, gat },
-        { selectedGatId: chosen.key },
+        { selectedGatId: gat ? String(gat._id) : chosen.key },
       );
     }
 
     case STATES.WAITING_FOR_ACTION: {
-      const prompt = actionHubPrompt(language, promptContext.gat);
+      let activeGat = promptContext.gat;
+      if (!activeGat && session.selectedGatId) {
+        const pool = (promptContext.gats && promptContext.gats.length)
+          ? promptContext.gats
+          : (farmer?.associatedGats || []);
+        activeGat = pool.find((g) => String(g._id) === String(session.selectedGatId) || String(g.gatNumber) === String(session.selectedGatId));
+        if (!activeGat) {
+          activeGat = {
+            gatNumber: String(session.selectedGatId).replace(/^gat_/, ''),
+            village: session.selectedVillage || 'शेतात'
+          };
+        }
+      }
+      const prompt = actionHubPrompt(language, activeGat);
       const chosen = parsedMessage.type === MESSAGE_TYPES.TEXT
         ? matchOption(prompt, parsedMessage.data.text)
         : null;
