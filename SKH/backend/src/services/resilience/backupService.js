@@ -335,15 +335,46 @@ async function checkSystemHealth() {
   const snapshots = listSnapshots();
   const latestSnapshot = snapshots[0] || null;
 
-  // Check if explicitly corrupted or data wiped
+  // If marker says CORRUPTED but submissions are actually present (> 0), auto-heal to HEALTHY
   if (marker && marker.status === 'CORRUPTED') {
+    if (submissionsCount > 0) {
+      await SystemMarker.findOneAndUpdate(
+        { markerKey: 'PRIMARY_SYSTEM_HEALTH' },
+        {
+          $set: {
+            status: 'HEALTHY',
+            lastHealthyCheck: new Date(),
+            corruptedAt: null
+          }
+        }
+      );
+    } else {
+      return {
+        status: 'corrupted',
+        healthy: false,
+        detectedAt: marker.corruptedAt || new Date(),
+        reason: 'Critical database blackout/corruption state detected. Submissions table is missing or wiped.',
+        details: {
+          submissionsCount,
+          farmersCount,
+          gatsCount,
+          lastBackupAvailable: latestSnapshot ? latestSnapshot.filename : null,
+          lastBackupTime: latestSnapshot ? latestSnapshot.createdAt : null,
+          availableSnapshotsCount: snapshots.length
+        }
+      };
+    }
+  }
+
+  // If submissions count is 0 and gats exist (wiped state)
+  if (submissionsCount === 0 && (gatsCount > 0 || farmersCount > 0)) {
     return {
       status: 'corrupted',
       healthy: false,
-      detectedAt: marker.corruptedAt || new Date(),
-      reason: 'Critical database blackout/corruption state detected. Submissions table is missing or wiped.',
+      detectedAt: marker?.corruptedAt || new Date(),
+      reason: 'Database integrity breach detected: Submissions collection is empty while Gats/Farmers exist.',
       details: {
-        submissionsCount,
+        submissionsCount: 0,
         farmersCount,
         gatsCount,
         lastBackupAvailable: latestSnapshot ? latestSnapshot.filename : null,

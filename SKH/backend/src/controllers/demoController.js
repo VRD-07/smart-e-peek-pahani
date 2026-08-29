@@ -104,8 +104,8 @@ const handleListSnapshots = async (req, res) => {
 const handleCheckSystemHealth = async (req, res) => {
   try {
     const health = await checkSystemHealth();
-    return res.status(health.healthy ? 200 : 503).json({
-      success: health.healthy,
+    return res.status(200).json({
+      success: true,
       ...health
     });
   } catch (error) {
