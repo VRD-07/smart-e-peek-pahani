@@ -549,7 +549,8 @@ describe('Escalation Ladder - manual trigger service function', () => {
     const result = await escalateForFarmer({ phoneNumber: farmer.phoneNumber, now: NOW });
 
     expect(result.channelsAttempted).toEqual([CHANNELS.WHATSAPP, CHANNELS.SMS, CHANNELS.VOICE]);
-    expect(result.farmer.phoneNumber).toBe(PHONE);
+    // Stored canonically, whatever shape the number was created with.
+    expect(result.farmer.phoneNumber).toBe('+919990001111');
     expect(result.deadline.id).toBe(deadline._id.toString());
     expect(provider.getSentMessages()).toHaveLength(2);
     expect(provider.getPlacedCalls()).toHaveLength(1);

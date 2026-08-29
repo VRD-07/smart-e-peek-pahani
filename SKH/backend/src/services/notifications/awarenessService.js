@@ -15,6 +15,7 @@ const {
   daysBetween,
   formatDeadlineDate,
 } = require('./addressing');
+const { findFarmerByPhone } = require('../farmers/farmerLookup');
 const {
   NOTIFICATION_TYPES,
   NOTIFICATION_STATUS,
@@ -294,7 +295,7 @@ async function escalateForFarmer({
 } = {}) {
   const farmer = farmerId
     ? await Farmer.findById(farmerId)
-    : await Farmer.findOne({ phoneNumber });
+    : await findFarmerByPhone(phoneNumber);
 
   if (!farmer) return { error: 'FARMER_NOT_FOUND' };
 

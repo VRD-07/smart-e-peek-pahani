@@ -1,13 +1,15 @@
 const mongoose = require('mongoose');
 const { STATES, LANGUAGES } = require('../services/whatsapp/constants');
 const { SEASONS, PEEK_TYPES, WATER_SOURCES } = require('../services/survey/constants');
+const { phoneField } = require('../utils/phone');
 
 const whatsappSessionSchema = new mongoose.Schema({
-  phoneNumber: {
-    type: String,
+  // E.164, not the raw 'whatsapp:+91...' Twilio sends, so a session can be
+  // matched to its Farmer record by equality.
+  phoneNumber: phoneField({
     required: true,
     index: true,
-  },
+  }),
   // Derived from the flow's own state list rather than repeated here. The two
   // copies had already drifted once; adding the Phase 7 survey states by hand
   // would have been a second chance to.

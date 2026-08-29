@@ -28,6 +28,11 @@ const LOCATION_REASON_CODES = {
   // Inside the polygon, but close enough to the edge that GPS error could
   // account for the difference.
   NEAR_BOUNDARY: 'NEAR_BOUNDARY',
+  // Outside the polygon altogether. Carries the distance to the nearest edge,
+  // because "outside the boundary" alone does not tell a farmer whether they are
+  // in the next furrow or the next village — and only one of those is worth
+  // walking back for.
+  OUTSIDE_BOUNDARY: 'OUTSIDE_BOUNDARY',
 };
 
 const AREA_REASON_CODES = {

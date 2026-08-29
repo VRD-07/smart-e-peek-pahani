@@ -182,9 +182,11 @@ describe('Demo Walkthrough — verified filing inside a declared zone', () => {
 
     const [sent] = getNotificationProvider().getSentMessages();
     expect(sent.to).toBe('whatsapp:+911234567890');
-    expect(sent.body).toContain('Gat 101');
+    // Marathi: the demo farmer is seeded with the system's default language, so
+    // this is the message a judge actually sees on the phone.
+    expect(sent.body).toContain('गट 101');
     expect(sent.body).toContain('soybean');
-    expect(sent.body).toContain('may qualify');
+    expect(sent.body).toContain('पात्र ठरवू शकते');
 
     const match = await CalamityMatch.findOne({ submissionId: submission._id });
     expect(match.farmerNotified).toBe(true);

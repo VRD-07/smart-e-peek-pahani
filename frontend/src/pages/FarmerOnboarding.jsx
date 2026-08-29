@@ -391,7 +391,15 @@ export const FarmerOnboarding = () => {
   const isStepValid = () => {
     switch (currentStep) {
       case 0: return formData.gatId && formData.crop;
-      case 1: return formData.location && formData.location.isValid === true;
+      // A location outside the parcel may still be filed. The client-side check is
+      // advisory — the authoritative decision is the backend validation gate, which
+      // records the filing and flags it for an officer with the distance attached.
+      // Blocking here instead hid the out-of-bounds case from the record entirely,
+      // which is worse: a farmer who has picked the wrong Gat gets no trace and no
+      // officer ever sees it. Poor accuracy still blocks: that is not a decision
+      // about where they are, it is not knowing where they are.
+      case 1: return Boolean(formData.location)
+        && (formData.location.isValid === true || formData.location.status === 'OUTSIDE');
       case 2: return formData.photo !== null;
       case 3: return true;
       default: return false;

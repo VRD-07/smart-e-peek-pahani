@@ -6,7 +6,9 @@ const { buildFlowContext } = require('../services/whatsapp/flowContext');
 const { processLocation } = require('../services/whatsapp/locationService');
 const { processMedia } = require('../services/whatsapp/mediaService');
 const { MESSAGE_TYPES, STATES } = require('../services/whatsapp/constants');
-const { AREA_REASON_CODES } = require('../services/validation/constants');
+const { AREA_REASON_CODES, LOCATION_REASON_CODES } = require('../services/validation/constants');
+const { findFarmerByPhone } = require('../services/farmers/farmerLookup');
+const { toE164 } = require('../utils/phone');
 const WhatsAppSession = require('../models/WhatsAppSession');
 
 // States where a text message is a crop name and should go through the matcher.
@@ -23,7 +25,11 @@ async function handleWebhook(req, res) {
   try {
     const payload = req.body || {};
 
-    // Twilio sends sender number in the 'From' field (e.g. 'whatsapp:+1234567890')
+    // Twilio sends the sender in the 'From' field as 'whatsapp:+919876543210'.
+    // Everything downstream — the session, the Farmer lookup, the notification log —
+    // keys on the canonical E.164 number instead. Using the raw value here is what
+    // made a farmer who registered on the website ("9876543210") invisible to the
+    // bot, which then answered a perfectly registered number with "not registered".
     const sender = payload.From;
 
     if (!sender) {
@@ -31,16 +37,21 @@ async function handleWebhook(req, res) {
       return res.status(400).send('Bad Request: Missing From field');
     }
 
+    const phoneNumber = toE164(sender);
+
+    if (!phoneNumber) {
+      return res.status(400).send('Bad Request: Unusable From field');
+    }
+
     // 1. Fetch current session atomically, or create it if it doesn't exist
     let currentSession = await WhatsAppSession.findOneAndUpdate(
-      { phoneNumber: sender },
-      { $setOnInsert: { phoneNumber: sender, state: STATES.START } },
+      { phoneNumber },
+      { $setOnInsert: { phoneNumber, state: STATES.START } },
       { new: true, upsert: true }
     );
 
     // 1.5 Fetch Farmer
-    const Farmer = require('../models/Farmer');
-    const farmer = await Farmer.findOne({ phoneNumber: sender }).populate('associatedGats');
+    const farmer = await findFarmerByPhone(phoneNumber, { populate: 'associatedGats' });
 
     // 1.55 Adopt the farmer's stored language preference onto a fresh session.
     //
@@ -64,7 +75,7 @@ async function handleWebhook(req, res) {
     try {
       const { sendAwarenessIntro } = require('../services/notifications/awarenessService');
       const introLanguage = farmer?.preferredLanguage || currentSession.language || 'mr';
-      await sendAwarenessIntro(sender, introLanguage, farmer?._id || null);
+      await sendAwarenessIntro(phoneNumber, introLanguage, farmer?._id || null);
     } catch (error) {
       // Awareness is additive; never let it break the survey flow.
       console.error('[WhatsApp Controller] Awareness intro failed:', error.message);
@@ -269,7 +280,7 @@ async function handleWebhook(req, res) {
         try {
           const createdSubmission = await createSubmission(submissionData);
           const { createBridgeToken } = require('../services/whatsapp/webBridgeService');
-          const bridge = await createBridgeToken(sender, createdSubmission._id);
+          const bridge = await createBridgeToken(phoneNumber, createdSubmission._id);
           replyText += `\n\nSubmit your data securely here: ${bridge.url}`;
 
           // Step 3 - Connect Submission to Validation internally
@@ -286,6 +297,22 @@ async function handleWebhook(req, res) {
             replyText += `\n\n${getMessage('AREA_OVERALLOCATION_NOTICE', language, {
               registered: formatHectares(areaCheck.registeredArea, language),
               claimed: formatHectares(areaCheck.claimedTotal, language),
+            })}`;
+          }
+
+          // Same reasoning for a filing made outside the parcel: the distance is
+          // the difference between "walk back into your field" and "you have
+          // selected the wrong Gat", and only the farmer can tell which it is.
+          // Deliberately not extended to the near-boundary REVIEW case — a filing
+          // a few metres inside its own edge is not a farmer who went to the wrong
+          // place, and telling them a distance would suggest they had.
+          const locationCheck = validated?.validationResultId?.checks?.location;
+          if (locationCheck
+            && locationCheck.reasonCode === LOCATION_REASON_CODES.OUTSIDE_BOUNDARY
+            && typeof locationCheck.distanceFromBoundary === 'number') {
+            const { formatDistance } = require('../utils/distance');
+            replyText += `\n\n${getMessage('OUT_OF_BOUNDS_DISTANCE_NOTICE', language, {
+              distance: formatDistance(locationCheck.distanceFromBoundary, language),
             })}`;
           }
         } catch (error) {

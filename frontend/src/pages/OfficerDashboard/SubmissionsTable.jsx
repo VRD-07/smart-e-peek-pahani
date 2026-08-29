@@ -1,4 +1,6 @@
-import { ArrowDown, ArrowUp, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDown, ArrowUp, Check, RefreshCw, X } from 'lucide-react';
+import api from '../../services/api';
 import { RELIEF_META, statusMeta } from './statusMeta';
 
 const COLUMNS = [
@@ -10,6 +12,12 @@ const COLUMNS = [
   { key: 'createdAt', label: 'Submitted', sortable: true },
 ];
 
+// An override is only meaningful on a filing the gate did not settle, or one an
+// officer already settled the other way. Approving something already VALID, or a
+// filing still queued for validation, would be a no-op with a confusing audit trail.
+const CAN_APPROVE = ['REVIEW', 'INVALID'];
+const CAN_REJECT = ['REVIEW', 'VALID'];
+
 const SortIcon = ({ active, order }) => {
   if (!active) return null;
   return order === 'asc'
@@ -17,7 +25,32 @@ const SortIcon = ({ active, order }) => {
     : <ArrowDown className="w-3.5 h-3.5" />;
 };
 
-export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSort }) => {
+export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSort, onReviewed }) => {
+  // Which row is mid-request, and the error from the last failed one. Kept local
+  // to the table: the dashboard's own error banner is about loading the list.
+  const [pendingId, setPendingId] = useState(null);
+  const [overrideError, setOverrideError] = useState(null);
+
+  const handleOverride = async (submissionId, status) => {
+    setPendingId(submissionId);
+    setOverrideError(null);
+
+    try {
+      await api.patch(`/submissions/${submissionId}/status`, { status });
+      // Re-reads the list through the dashboard's existing loader, so the table,
+      // the status counts and the map all move together.
+      if (onReviewed) await onReviewed();
+    } catch (err) {
+      setOverrideError(
+        err.response?.status === 403
+          ? 'This account is not authorised to override submission outcomes.'
+          : err.response?.data?.message || 'Could not record the decision. Please try again.'
+      );
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
@@ -36,6 +69,12 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
 
   return (
     <div className="overflow-x-auto">
+      {overrideError && (
+        <div className="m-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+          {overrideError}
+        </div>
+      )}
+
       <table className="w-full text-sm text-left">
         <thead className="text-xs uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-100">
           <tr>
@@ -55,6 +94,7 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
               </th>
             ))}
             <th scope="col" className="px-4 py-3 font-semibold">Reasons</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Decision</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -62,6 +102,7 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
             const meta = statusMeta(sub.status);
             const reasons = sub.validationResultId?.reasons || [];
             const matches = sub.calamityMatches || [];
+            const busy = pendingId === sub._id;
 
             return (
               <tr key={sub._id} className="hover:bg-gray-50 transition-colors">
@@ -102,6 +143,14 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
                         {matches.length > 1 && ` (${matches.length})`}
                       </span>
                     )}
+
+                    {/* Marks the outcome as a person's decision rather than the
+                        gate's, which is the whole point of keeping reviewedBy. */}
+                    {sub.reviewedAt && (
+                      <span className="text-[11px] text-gray-400">
+                        Officer decision · {new Date(sub.reviewedAt).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
@@ -109,6 +158,39 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
                 </td>
                 <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">
                   {reasons.length > 0 ? reasons.join('; ') : '—'}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {CAN_APPROVE.includes(sub.status) && (
+                      <button
+                        onClick={() => handleOverride(sub._id, 'VALID')}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40"
+                        title="Record this filing as verified"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Approve
+                      </button>
+                    )}
+
+                    {CAN_REJECT.includes(sub.status) && (
+                      <button
+                        onClick={() => handleOverride(sub._id, 'REJECTED')}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40"
+                        title="Record this filing as rejected"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Reject
+                      </button>
+                    )}
+
+                    {busy && <RefreshCw className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+
+                    {!CAN_APPROVE.includes(sub.status) && !CAN_REJECT.includes(sub.status) && (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </div>
                 </td>
               </tr>
             );

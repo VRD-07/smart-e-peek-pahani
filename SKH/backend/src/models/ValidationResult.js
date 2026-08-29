@@ -32,6 +32,7 @@ const validationResultSchema = new mongoose.Schema({
       // capped by parcel size — without it, two near-boundary reviews on
       // differently-sized Gats are not comparable.
       reviewBufferMeters: Number,
+      reason: String,
     },
     gat: {
       status: { type: String, enum: ['PASS', 'FAIL', 'REVIEW'] },

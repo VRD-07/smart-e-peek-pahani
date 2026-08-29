@@ -7,6 +7,7 @@ const {
   LOCATION_REASON_CODES,
   nearBoundaryThreshold,
 } = require('./constants');
+const { formatDistance } = require('../../utils/distance');
 
 /**
  * Distance in metres from the middle of the parcel to its nearest edge — a proxy
@@ -57,10 +58,17 @@ const validateLocation = (location, gatBoundary) => {
     const distanceToBoundary = pointToLineDistance(pt, line, { units: 'meters' });
 
     if (!isInside) {
+      // The distance was already being measured here and thrown away, which left
+      // the farmer with "outside the selected field" and no way to tell a drifted
+      // GPS fix from standing in the wrong village. It is reported in English
+      // because this string is the officer-facing reason on the dashboard; the
+      // farmer-facing translations format the same number themselves.
       return {
         status: 'FAIL',
         insideGat: false,
-        distanceFromBoundary: distanceToBoundary
+        distanceFromBoundary: distanceToBoundary,
+        reasonCode: LOCATION_REASON_CODES.OUTSIDE_BOUNDARY,
+        reason: `Outside Gat boundary by approximately ${formatDistance(distanceToBoundary, 'en')}`
       };
     }
 

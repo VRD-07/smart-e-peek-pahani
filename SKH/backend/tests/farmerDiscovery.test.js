@@ -69,7 +69,7 @@ describe('Farmer Discovery Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.name).toBe('Farmer A');
-    expect(res.body.data.phoneNumber).toBe('1111111111');
+    expect(res.body.data.phoneNumber).toBe('+911111111111');
     expect(res.body.data.associatedGats).toBeDefined();
     expect(res.body.data.associatedGats.length).toBe(1);
     expect(res.body.data.associatedGats[0].gatNumber).toBe('101');
@@ -140,7 +140,7 @@ describe('Farmer Discovery Integration Tests', () => {
 
     // Must return Farmer A, proving isolation
     expect(res.body.data.name).toBe('Farmer A');
-    expect(res.body.data.phoneNumber).toBe('1111111111');
+    expect(res.body.data.phoneNumber).toBe('+911111111111');
   });
 
   it('I: Query/body farmerId cannot override req.user.farmerId', async () => {

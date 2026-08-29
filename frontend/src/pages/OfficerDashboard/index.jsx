@@ -236,6 +236,7 @@ export const OfficerDashboard = () => {
               sortBy={sortBy}
               sortOrder={sortOrder}
               onSort={handleSort}
+              onReviewed={loadSubmissions}
             />
           ) : (
             <SubmissionsMap submissions={submissions} />

@@ -127,6 +127,13 @@ const DICTIONARY = {
     // ---- Area overallocation outcome ----
     AREA_OVERALLOCATION_NOTICE: 'तुम्ही नोंदवलेले क्षेत्र या गटाच्या नोंदणीकृत क्षेत्रात बसत नाही.\n\nनोंदणीकृत क्षेत्र: {{registered}}\nया हंगामातील एकूण नोंद: {{claimed}}\n\nतुमची नोंद रद्द झालेली नाही — ती अधिकाऱ्यांच्या तपासणीसाठी पाठवली आहे. पुन्हा नोंद करू नका.',
 
+    // ---- Out-of-boundary outcome ----
+    // The distance is what makes this actionable: a farmer 40 metres out walks
+    // back into the field, one 5 km out has picked the wrong Gat from the list.
+    // "अंदाजे" (approximately) is deliberate — the figure comes from a phone GPS fix
+    // and a traced boundary, and stating it to the metre would overclaim both.
+    OUT_OF_BOUNDS_DISTANCE_NOTICE: 'तुम्ही तुमच्या नोंदणीकृत शेताच्या हद्दीपासून अंदाजे {{distance}} अंतरावर आहात.\n\nतुमच्या शेतात उभे राहून पुन्हा नोंद करा, किंवा यादीतून योग्य गट निवडा.',
+
     // ---- Awareness (Phase 6) ----
     AWARENESS_INTRO: 'ई-पीक पाहणी म्हणजे काय?\n\nतुमच्या शेतात कोणते पीक आहे याची शासकीय नोंद. ही नोंद शेतकऱ्याने स्वतः करायची असते.\n\nही नोंद का महत्त्वाची आहे?\nअतिवृष्टी, दुष्काळ किंवा गारपीट यासाठी शासन नुकसान भरपाई जाहीर करते. पण भरपाई मिळण्यासाठी त्या हंगामात तुमच्या पिकाची नोंद झालेली असणे आवश्यक असते. नोंद नसेल, तर खरोखर नुकसान होऊनही मदत मिळत नाही.\n\nनोंद करण्यासाठी कधीही \'Hi\' पाठवा. फक्त दोन मिनिटे लागतात.',
     DEADLINE_REMINDER: 'स्मरणपत्र: {{season}} {{year}} ई-पीक पाहणीची अंतिम तारीख {{date}} आहे — {{days}} दिवस शिल्लक.\n\nया हंगामात तुमच्या पिकाची नोंद आमच्याकडे दिसत नाही. नोंद नसेल तर पिकाचे नुकसान झाले तरी नुकसान भरपाईसाठी तुम्ही पात्र ठरणार नाही.\n\nआता नोंद करण्यासाठी \'Hi\' पाठवा. फक्त दोन मिनिटे लागतात.',
@@ -245,6 +252,9 @@ const DICTIONARY = {
     // ---- Area overallocation outcome ----
     AREA_OVERALLOCATION_NOTICE: 'आपने दर्ज किया क्षेत्र इस गट के पंजीकृत क्षेत्र में नहीं बैठता।\n\nपंजीकृत क्षेत्र: {{registered}}\nइस मौसम की कुल नोंद: {{claimed}}\n\nआपकी नोंद रद्द नहीं हुई है — वह अधिकारी की जाँच के लिए भेजी गई है। दोबारा दर्ज न करें।',
 
+    // ---- Out-of-boundary outcome ----
+    OUT_OF_BOUNDS_DISTANCE_NOTICE: 'आप अपने पंजीकृत खेत की सीमा से लगभग {{distance}} दूर हैं।\n\nअपने खेत में खड़े होकर दोबारा दर्ज करें, या सूची से सही गट चुनें।',
+
     // ---- Awareness (Phase 6) ----
     AWARENESS_INTRO: 'ई-पीक पाहणी क्या है?\n\nआपके खेत में कौन सी फसल खड़ी है, इसका सरकारी रिकॉर्ड। यह रिकॉर्ड किसान को खुद दर्ज करना होता है।\n\nयह क्यों ज़रूरी है?\nअतिवृष्टि, सूखा या ओलावृष्टि पर सरकार मुआवज़ा घोषित करती है। लेकिन मुआवज़े के लिए उस मौसम में आपकी फसल का रिकॉर्ड होना ज़रूरी है। रिकॉर्ड न हो तो नुकसान होने पर भी मदद नहीं मिलती।\n\nदर्ज करने के लिए कभी भी \'Hi\' भेजें। सिर्फ दो मिनट लगते हैं।',
     DEADLINE_REMINDER: 'स्मरण: {{season}} {{year}} ई-पीक पाहणी की अंतिम तारीख {{date}} है — {{days}} दिन बाकी।\n\nइस मौसम में आपकी फसल का रिकॉर्ड हमारे पास नहीं है। रिकॉर्ड न होने पर फसल का नुकसान होने पर भी आप मुआवज़े के पात्र नहीं होंगे।\n\nअभी दर्ज करने के लिए \'Hi\' भेजें। सिर्फ दो मिनट लगते हैं।',
@@ -357,6 +367,9 @@ const DICTIONARY = {
 
     // ---- Area overallocation outcome ----
     AREA_OVERALLOCATION_NOTICE: 'The area you entered does not fit within this Gat\'s registered size.\n\nRegistered area: {{registered}}\nTotal recorded this season: {{claimed}}\n\nYour record has not been rejected — it has been sent to an officer for review. Please do not file it again.',
+
+    // ---- Out-of-boundary outcome ----
+    OUT_OF_BOUNDS_DISTANCE_NOTICE: 'You are approximately {{distance}} away from your registered field boundary.\n\nPlease file again while standing in your field, or select the correct Gat from the list.',
 
     // ---- Awareness (Phase 6) ----
     AWARENESS_INTRO: 'What is E-Peek Pahani?\n\nIt is the government record of which crop is standing in your field. The record has to be filed by you, the farmer.\n\nWhy it matters:\nWhen heavy rain, drought or hailstorm is declared a calamity, the state announces compensation — but relief is assessed against the crop record filed for that season. With no record, help does not reach you even when the loss is real.\n\nSend \'Hi\' whenever you are ready to file. It takes about two minutes.',

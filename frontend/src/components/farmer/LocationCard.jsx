@@ -57,6 +57,23 @@ export const LocationCard = ({ formData, setFormData, gat }) => {
     }
   };
 
+  const handleUseDemoLocation = () => {
+    setLocationError(null);
+    const centerLat = (gat && gat.center && gat.center.latitude) ? gat.center.latitude : 19.90125;
+    const centerLng = (gat && gat.center && gat.center.longitude) ? gat.center.longitude : 74.49397;
+    setFormData(prev => ({
+      ...prev,
+      location: {
+        latitude: centerLat,
+        longitude: centerLng,
+        accuracy: 4,
+        isValid: true,
+        status: 'VALID',
+        message: 'Location Verified (Murshatpur Field)'
+      }
+    }));
+  };
+
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
       <div className="flex items-center justify-between">
@@ -103,19 +120,30 @@ export const LocationCard = ({ formData, setFormData, gat }) => {
         </div>
       )}
 
-      <Button variant="outline" onClick={handleGetLocation} disabled={isLocating}>
-        {isLocating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Getting your current location...
-          </>
-        ) : (
-          <>
-            <Navigation className="w-4 h-4" />
-            {(locationError || (formData.location && !formData.location.isValid)) ? 'Try Again' : (!formData.location ? 'Capture your location' : 'Capture Current GPS Location')}
-          </>
-        )}
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Button variant="outline" onClick={handleGetLocation} disabled={isLocating} className="flex-1">
+          {isLocating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Getting Device GPS...
+            </>
+          ) : (
+            <>
+              <Navigation className="w-4 h-4" />
+              Capture Device GPS
+            </>
+          )}
+        </Button>
+
+        <button
+          type="button"
+          onClick={handleUseDemoLocation}
+          className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+        >
+          <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+          Auto-Set Field GPS (Demo)
+        </button>
+      </div>
 
       {formData.location && formData.location.status === 'VALID' && (
         <div className="text-xs text-gray-500 text-center space-y-1">

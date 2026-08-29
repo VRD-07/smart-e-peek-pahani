@@ -4,6 +4,7 @@ const {
   NOTIFICATION_STATUS,
   CHANNELS,
 } = require('../services/notifications/constants');
+const { phoneField } = require('../utils/phone');
 
 /**
  * Audit trail for every outbound notification attempt, on every channel.
@@ -19,13 +20,15 @@ const {
  * FAILED row is left retryable and upgraded to SENT on a later run.
  */
 const notificationLogSchema = new mongoose.Schema({
-  // Stored in the same 'whatsapp:+91...' form Twilio uses for inbound webhooks,
-  // so intro messages can be logged before a Farmer record exists.
-  phoneNumber: {
-    type: String,
+  // E.164, independent of the channel the row records — the 'whatsapp:' prefix
+  // belongs to the outbound address, not to the number. Keeping one format here is
+  // what lets the reach stats and the dedupe key group a farmer's WhatsApp, SMS
+  // and voice attempts together instead of splitting them three ways.
+  // Not tied to a Farmer record: intro messages are logged before one exists.
+  phoneNumber: phoneField({
     required: true,
     index: true,
-  },
+  }),
   farmerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Farmer',

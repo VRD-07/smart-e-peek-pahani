@@ -15,7 +15,8 @@ import {
   Flame,
   PlusCircle,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Send
 } from 'lucide-react';
 import api from '../services/api';
 import { db } from '../storage/db';
@@ -25,16 +26,17 @@ export const DemoControlPanel = () => {
   const [logOutput, setLogOutput] = useState(null);
   const [offlineCount, setOfflineCount] = useState(0);
 
-  // Gat seeding state
+  // Custom phone number for live demonstration to judges
+  const [targetPhone, setTargetPhone] = useState('+91');
+
+  // Gat seeding state with Murshatpur default
   const [gatForm, setGatForm] = useState({
-    gatNumber: '999',
-    village: 'Demo Village',
+    gatNumber: '101',
+    village: 'Murshatpur',
     district: 'Nashik',
     registeredArea: '2.4',
     coordinatesText: '19.9010, 74.4940\n19.9030, 74.4940\n19.9030, 74.4965\n19.9010, 74.4965'
   });
-
-  const [recipientPhone, setRecipientPhone] = useState('1234567890');
 
   const appendLog = (title, data) => {
     setLogOutput({
@@ -45,7 +47,7 @@ export const DemoControlPanel = () => {
   };
 
   const handleSeedGat = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoadingAction('seed-gat');
     try {
       const coords = gatForm.coordinatesText
@@ -65,7 +67,7 @@ export const DemoControlPanel = () => {
         coordinates: coords
       });
 
-      appendLog('✅ Seeded New Gat Boundary', res.data.data);
+      appendLog('✅ Seeded Murshatpur Gat Boundary', res.data.data);
     } catch (err) {
       appendLog('❌ Gat Seeding Failed', err.response?.data || err.message);
     } finally {
@@ -88,11 +90,12 @@ export const DemoControlPanel = () => {
   const handleTriggerEscalation = async (channel) => {
     setLoadingAction(`escalate-${channel}`);
     try {
-      const res = await api.post('/demo/trigger-escalation', {
-        channel,
-        phoneNumber: recipientPhone
-      });
-      appendLog(`📢 Escalation Triggered: ${channel} (to ${recipientPhone})`, res.data.data);
+      const payload = { channel };
+      if (targetPhone && targetPhone.trim().length > 3) {
+        payload.phoneNumber = targetPhone.trim();
+      }
+      const res = await api.post('/demo/trigger-escalation', payload);
+      appendLog(`📢 Live Escalation Dispatched: ${channel}`, res.data.data);
     } catch (err) {
       appendLog(`❌ Escalation Failed: ${channel}`, err.response?.data || err.message);
     } finally {
@@ -106,14 +109,14 @@ export const DemoControlPanel = () => {
       const id = await db.submissions.add({
         status: 'SYNC_PENDING',
         data: {
-          name: 'Demo Farmer (Offline Queue)',
-          mobile: '1234567890',
-          village: 'Demo Village',
+          name: 'Demo Farmer (Murshatpur)',
+          mobile: targetPhone && targetPhone.length > 5 ? targetPhone : '9876543210',
+          village: 'Murshatpur',
           gat: '101',
           crop: 'soybean',
-          registeredArea: 0.8,
+          registeredArea: 1.2,
           season: 'KHARIF',
-          location: { latitude: 19.9012, longitude: 74.4939, isValid: true },
+          location: { latitude: 19.9012, longitude: 74.4939, isValid: true, status: 'VALID', message: 'Location Verified' },
           photo: 'data:image/jpeg;base64,offline-mock-image'
         },
         timestamp: Date.now()
@@ -134,7 +137,6 @@ export const DemoControlPanel = () => {
       const pending = await db.submissions.where('status').equals('SYNC_PENDING').toArray();
       let synced = 0;
       for (const item of pending) {
-        // Trigger a real submission for each item
         await api.post('/demo/trigger-submission', { scenario: 'VALID' });
         await db.submissions.delete(item.id);
         synced++;
@@ -161,40 +163,62 @@ export const DemoControlPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 p-6 md:p-10 font-sans">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-900 text-slate-100 p-4 md:p-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header Banner */}
-        <div className="bg-slate-800/80 border border-amber-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div className="bg-slate-800/90 border border-amber-500/40 rounded-2xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm tracking-wider uppercase">
-                <ShieldAlert className="w-5 h-5 text-amber-400" />
-                Internal Tooling Only
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs tracking-wider uppercase">
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+                Live Demo Control Station • Murshatpur, Maharashtra
               </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-white mt-1">
-                Demo Control Panel & Pipeline Simulator
+              <h1 className="text-2xl md:text-3xl font-black text-white mt-1 tracking-tight">
+                Smart E-Peek Pahani Pipeline & Channel Controller
               </h1>
-              <p className="text-slate-400 text-sm mt-1">
-                Executes live backend validation pipelines and multi-channel escalation on demand without waiting for timeouts or live GPS.
+              <p className="text-slate-400 text-xs md:text-sm mt-1 max-w-3xl">
+                Execute live validation pipelines, test AI crop vision, trigger automated multi-channel escalation (WhatsApp → SMS → Phone Call) directly to your phone before judges, and simulate offline field capture.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <Link
                 to="/officer"
                 target="_blank"
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-semibold shadow-lg transition-all"
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-primary-900/30 transition-all hover:scale-105"
               >
                 Officer Dashboard <ExternalLink className="w-3.5 h-3.5" />
               </Link>
               <Link
                 to="/onboarding"
-                className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold transition-all"
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-xl text-xs font-bold transition-all hover:scale-105"
               >
-                Farmer PWA <ExternalLink className="w-3.5 h-3.5" />
+                Farmer Web App <ExternalLink className="w-3.5 h-3.5" />
               </Link>
             </div>
+          </div>
+        </div>
+
+        {/* Live Phone Recipient Target */}
+        <div className="bg-gradient-to-r from-emerald-950/40 via-slate-800/80 to-slate-800/80 border border-emerald-500/30 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+              <Smartphone className="w-5 h-5 text-emerald-400" />
+              Live Phone Target for In-Person Judge Demo
+            </div>
+            <p className="text-slate-400 text-xs">
+              Enter your mobile number with country code (e.g. <span className="text-emerald-300 font-mono">+919876543210</span>) to receive real-time WhatsApp alerts, SMS reminders, and IVR Phone Calls on stage.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <input
+              type="text"
+              value={targetPhone}
+              onChange={(e) => setTargetPhone(e.target.value)}
+              placeholder="+919876543210"
+              className="bg-slate-950 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-sm font-mono text-emerald-300 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
           </div>
         </div>
 
@@ -203,98 +227,80 @@ export const DemoControlPanel = () => {
           {/* Column 1 & 2: Controls */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Section 1: Gat Seeding Tool */}
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 shadow-lg space-y-4">
+            {/* Section 1: Multi-Channel Escalation Trigger to Live Phone */}
+            <div className="bg-slate-800/60 border border-purple-500/30 rounded-2xl p-5 shadow-lg space-y-4">
               <div className="flex items-center justify-between border-b border-slate-700 pb-3">
                 <div className="flex items-center gap-2">
-                  <PlusCircle className="w-5 h-5 text-emerald-400" />
-                  <h2 className="text-base font-bold text-white">1. Seed / Register New Gat Boundary</h2>
+                  <PhoneCall className="w-5 h-5 text-purple-400" />
+                  <h2 className="text-base font-bold text-white">1. Multi-Channel Triggers (Ring Handset Live)</h2>
                 </div>
-                <span className="text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full font-mono">
-                  Turf.js Geofenced
+                <span className="text-[11px] bg-purple-950 text-purple-300 border border-purple-800 px-2.5 py-0.5 rounded-full font-mono">
+                  WhatsApp → SMS → Voice
                 </span>
               </div>
-              <form onSubmit={handleSeedGat} className="space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Gat Number</label>
-                    <input
-                      type="text"
-                      value={gatForm.gatNumber}
-                      onChange={e => setGatForm(prev => ({ ...prev, gatNumber: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Village</label>
-                    <input
-                      type="text"
-                      value={gatForm.village}
-                      onChange={e => setGatForm(prev => ({ ...prev, village: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">District</label>
-                    <input
-                      type="text"
-                      value={gatForm.district}
-                      onChange={e => setGatForm(prev => ({ ...prev, district: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Area (ha)</label>
-                    <input
-                      type="text"
-                      value={gatForm.registeredArea}
-                      onChange={e => setGatForm(prev => ({ ...prev, registeredArea: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
+              <p className="text-slate-400 text-xs">
+                Demonstrate the zero-friction safety net. If an illiterate or offline farmer doesn't file before the deadline, the system automatically descends the escalation ladder.
+              </p>
 
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-[11px] font-medium text-slate-400">Polygon Trail Coordinates (lat, lng per line)</label>
-                    <button
-                      type="button"
-                      onClick={() => setGatForm(prev => ({
-                        ...prev,
-                        coordinatesText: '19.9040, 74.4970\n19.9055, 74.4970\n19.9055, 74.4990\n19.9040, 74.4990'
-                      }))}
-                      className="text-[10px] text-emerald-400 hover:underline"
-                    >
-                      Use Sample Farm Trail
-                    </button>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => handleTriggerEscalation('WHATSAPP')}
+                  disabled={loadingAction === 'escalate-WHATSAPP'}
+                  className="p-3.5 bg-emerald-950/30 hover:bg-emerald-900/50 border border-emerald-600/40 hover:border-emerald-500 rounded-xl text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-emerald-300 flex items-center gap-1.5">
+                      <Send className="w-4 h-4 text-emerald-400" />
+                      1. WhatsApp Alert
+                    </span>
                   </div>
-                  <textarea
-                    rows={3}
-                    value={gatForm.coordinatesText}
-                    onChange={e => setGatForm(prev => ({ ...prev, coordinatesText: e.target.value }))}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 font-mono text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
+                  <p className="text-[11px] text-slate-400">
+                    Sends interactive Marathi WhatsApp survey reminder to recipient.
+                  </p>
+                </button>
 
                 <button
-                  type="submit"
-                  disabled={loadingAction === 'seed-gat'}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all"
+                  onClick={() => handleTriggerEscalation('SMS')}
+                  disabled={loadingAction === 'escalate-SMS'}
+                  className="p-3.5 bg-purple-950/30 hover:bg-purple-900/50 border border-purple-600/40 hover:border-purple-500 rounded-xl text-left transition-all group"
                 >
-                  {loadingAction === 'seed-gat' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                  Register & Seed Gat to DB
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-purple-300 flex items-center gap-1.5">
+                      <MessageSquare className="w-4 h-4 text-purple-400" />
+                      2. SMS Fallback
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Dispatches compact Devanagari SMS reminder for feature phones.
+                  </p>
                 </button>
-              </form>
+
+                <button
+                  onClick={() => handleTriggerEscalation('VOICE')}
+                  disabled={loadingAction === 'escalate-VOICE'}
+                  className="p-3.5 bg-indigo-950/30 hover:bg-indigo-900/50 border border-indigo-600/40 hover:border-indigo-500 rounded-xl text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-white group-hover:text-indigo-300 flex items-center gap-1.5">
+                      <PhoneCall className="w-4 h-4 text-indigo-400" />
+                      3. Live Phone Call
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Places automated IVR phone call to handset playing clear voice message.
+                  </p>
+                </button>
+              </div>
             </div>
 
-            {/* Section 2: Pipeline Scenarios */}
+            {/* Section 2: Validation Scenarios */}
             <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 shadow-lg space-y-4">
               <div className="flex items-center justify-between border-b border-slate-700 pb-3">
                 <div className="flex items-center gap-2">
                   <Play className="w-5 h-5 text-indigo-400" />
-                  <h2 className="text-base font-bold text-white">2. Trigger Pipeline Outcomes</h2>
+                  <h2 className="text-base font-bold text-white">2. Automated Validation Pipeline Scenarios</h2>
                 </div>
-                <span className="text-[11px] text-slate-400">Live Validation Service</span>
+                <span className="text-[11px] text-slate-400">AI Vision + Geofencing</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,7 +321,7 @@ export const DemoControlPanel = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Center GPS + Soybean photo + valid area. Auto-approves and updates officer dashboard.
+                    Murshatpur center GPS + Soybean photo + valid area. Auto-approves instantly.
                   </p>
                 </button>
 
@@ -335,7 +341,7 @@ export const DemoControlPanel = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Coordinate is &lt; 15m from perimeter edge. Routes to Officer Review with reason code.
+                    Coordinate is &lt; 15m from perimeter edge. Routes to Talathi / Officer queue.
                   </p>
                 </button>
 
@@ -375,7 +381,7 @@ export const DemoControlPanel = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Soybean photo vs Cotton declaration. Vision AI marks mismatch and rejects.
+                    Soybean photo vs Cotton declaration. Gemini Vision marks mismatch and rejects.
                   </p>
                 </button>
 
@@ -388,70 +394,88 @@ export const DemoControlPanel = () => {
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold text-xs text-white group-hover:text-cyan-300 flex items-center gap-1.5">
                       <CloudRain className="w-4 h-4 text-cyan-400" />
-                      Trigger Calamity Match (Relief Notification)
+                      Trigger Calamity Match (Excess Rainfall Relief)
                     </span>
                     <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded font-mono">
                       RELIEF MATCH
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Valid filing matches active rainfall CalamityZone. Triggers relief match & WhatsApp alert.
+                    Valid filing matches active rainfall CalamityZone in Murshatpur. Auto-matches relief & notifies farmer.
                   </p>
                 </button>
               </div>
             </div>
 
-            {/* Section 3: Escalation & Offline Tools */}
+            {/* Section 3: Gat Boundary Seeder & Offline PWA Queue */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               
-              {/* Escalation Fallbacks */}
+              {/* Gat Boundary Seeder */}
               <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 shadow-lg space-y-3">
-                <div className="flex items-center gap-2 border-b border-slate-700 pb-2">
-                  <Smartphone className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">3. Escalation Fallbacks</h3>
+                <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                  <div className="flex items-center gap-2">
+                    <PlusCircle className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Murshatpur Gat Seeder</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGatForm({
+                      gatNumber: '101',
+                      village: 'Murshatpur',
+                      district: 'Nashik',
+                      registeredArea: '2.4',
+                      coordinatesText: '19.9010, 74.4940\n19.9030, 74.4940\n19.9030, 74.4965\n19.9010, 74.4965'
+                    })}
+                    className="text-[10px] text-emerald-400 hover:underline"
+                  >
+                    Load Murshatpur
+                  </button>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Manually invoke Phase 6 escalation rungs bypassing the 24h/48h elapsed time window.
-                </p>
-                <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-400 mb-1">
-                      Recipient Mobile Number (e.g. +91XXXXXXXXXX)
-                    </label>
+                    <label className="block text-[10px] text-slate-400">Gat No.</label>
                     <input
                       type="text"
-                      value={recipientPhone}
-                      onChange={(e) => setRecipientPhone(e.target.value)}
-                      placeholder="+919876543210"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                      value={gatForm.gatNumber}
+                      onChange={e => setGatForm(prev => ({ ...prev, gatNumber: e.target.value }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
                     />
                   </div>
-
-                  <button
-                    onClick={() => handleTriggerEscalation('SMS')}
-                    disabled={loadingAction === 'escalate-SMS'}
-                    className="w-full py-2 px-3 bg-purple-900/40 hover:bg-purple-900/70 border border-purple-700 text-purple-200 text-xs font-medium rounded-xl flex items-center justify-between transition-all"
-                  >
-                    <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> Trigger SMS Fallback</span>
-                    <span className="text-[10px] font-mono">24h bypass</span>
-                  </button>
-                  <button
-                    onClick={() => handleTriggerEscalation('VOICE')}
-                    disabled={loadingAction === 'escalate-VOICE'}
-                    className="w-full py-2 px-3 bg-purple-900/40 hover:bg-purple-900/70 border border-purple-700 text-purple-200 text-xs font-medium rounded-xl flex items-center justify-between transition-all"
-                  >
-                    <span className="flex items-center gap-1.5"><PhoneCall className="w-3.5 h-3.5" /> Trigger Voice Call Fallback</span>
-                    <span className="text-[10px] font-mono">48h bypass</span>
-                  </button>
+                  <div>
+                    <label className="block text-[10px] text-slate-400">Village</label>
+                    <input
+                      type="text"
+                      value={gatForm.village}
+                      onChange={e => setGatForm(prev => ({ ...prev, village: e.target.value }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400">Area (ha)</label>
+                    <input
+                      type="text"
+                      value={gatForm.registeredArea}
+                      onChange={e => setGatForm(prev => ({ ...prev, registeredArea: e.target.value }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
+                    />
+                  </div>
                 </div>
+                <button
+                  onClick={handleSeedGat}
+                  disabled={loadingAction === 'seed-gat'}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all"
+                >
+                  {loadingAction === 'seed-gat' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                  Register & Seed to DB
+                </button>
               </div>
 
-              {/* Offline Dexie Tools */}
+              {/* Offline PWA Queue */}
               <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 shadow-lg space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-700 pb-2">
                   <div className="flex items-center gap-2">
                     <WifiOff className="w-4 h-4 text-sky-400" />
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">4. Offline PWA Queue</h3>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Offline PWA Queue</h3>
                   </div>
                   {offlineCount > 0 && (
                     <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-800 px-1.5 py-0.5 rounded font-mono">
@@ -460,7 +484,7 @@ export const DemoControlPanel = () => {
                   )}
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Simulate field disconnects by queuing submissions in local Dexie IndexedDB.
+                  Simulate zero network in deep rural fields by queueing submissions in IndexedDB.
                 </p>
                 <div className="space-y-2">
                   <button
@@ -469,15 +493,15 @@ export const DemoControlPanel = () => {
                     className="w-full py-2 px-3 bg-sky-900/40 hover:bg-sky-900/70 border border-sky-700 text-sky-200 text-xs font-medium rounded-xl flex items-center justify-between transition-all"
                   >
                     <span className="flex items-center gap-1.5"><WifiOff className="w-3.5 h-3.5" /> Queue Offline Submission</span>
-                    <span className="text-[10px] font-mono">IndexedDB</span>
+                    <span className="text-[10px] font-mono">Dexie IDB</span>
                   </button>
                   <button
                     onClick={handleDrainOfflineQueue}
                     disabled={loadingAction === 'drain-offline' || offlineCount === 0}
-                    className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:hover:bg-sky-600 text-white text-xs font-semibold rounded-xl flex items-center justify-between transition-all"
+                    className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl flex items-center justify-between transition-all"
                   >
-                    <span className="flex items-center gap-1.5"><Wifi className="w-3.5 h-3.5" /> Go Online & Drain Queue</span>
-                    <span className="text-[10px] font-mono">Sync</span>
+                    <span className="flex items-center gap-1.5"><Wifi className="w-3.5 h-3.5" /> Reconnect & Drain Queue</span>
+                    <span className="text-[10px] font-mono">Auto-Sync</span>
                   </button>
                 </div>
               </div>
@@ -489,16 +513,16 @@ export const DemoControlPanel = () => {
               <div>
                 <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
                   <Flame className="w-5 h-5 text-red-500" />
-                  5. Chaos Button (Full Dashboard Population)
+                  Chaos Mode: Full Dashboard Population
                 </div>
                 <p className="text-slate-400 text-xs mt-1">
-                  Generates 6-10 randomized submissions across all outcomes at once to populate maps & dashboard stats.
+                  Generates batch submissions across all 5 outcomes simultaneously to populate maps, graphs, and officer review queues.
                 </p>
               </div>
               <button
                 onClick={handleChaos}
                 disabled={loadingAction === 'chaos'}
-                className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 whitespace-nowrap transition-all"
+                className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 whitespace-nowrap transition-all hover:scale-105"
               >
                 {loadingAction === 'chaos' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
                 Fire Chaos Mode
@@ -509,7 +533,7 @@ export const DemoControlPanel = () => {
 
           {/* Column 3: Live Output Inspector */}
           <div className="space-y-4">
-            <div className="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-5 shadow-lg h-[680px] flex flex-col">
+            <div className="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-5 shadow-lg h-[740px] flex flex-col">
               <div className="flex items-center justify-between border-b border-slate-700 pb-3 mb-3">
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">Live Pipeline Output</h3>
                 {logOutput && (
@@ -521,7 +545,7 @@ export const DemoControlPanel = () => {
                 {logOutput ? (
                   <div className="space-y-3">
                     <p className="font-bold text-emerald-400 border-b border-slate-800 pb-1.5">{logOutput.title}</p>
-                    <pre className="text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap word-break break-all">
+                    <pre className="text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all">
                       {JSON.stringify(logOutput.data, null, 2)}
                     </pre>
                   </div>

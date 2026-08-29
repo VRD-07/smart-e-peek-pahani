@@ -207,7 +207,7 @@ describe('Officer Dashboard - GET /api/submissions (Phase 1)', () => {
       const row = res.body.data.submissions[0];
 
       expect(row.farmerId.name).toBe('Farmer A');
-      expect(row.farmerId.phoneNumber).toBe('1111111111');
+      expect(row.farmerId.phoneNumber).toBe('+911111111111');
       expect(row.gatId.gatNumber).toBe('101');
       expect(row.gatId.district).toBe('Nashik');
       expect(row.gatId.boundary).toBeDefined();

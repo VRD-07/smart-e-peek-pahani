@@ -6,33 +6,13 @@
  * would have made the two require each other in a cycle.
  */
 
-// Numbers reach us from Twilio as 'whatsapp:+91...', and the repo stores the
-// inbound `From` value verbatim on the Farmer record. Rather than migrate that
-// data, outbound sends normalize at the boundary. Bare 10-digit numbers (as used
-// by the demo seed) are assumed Indian.
-const DEFAULT_COUNTRY_CODE = '91';
+// Numbers are stored in E.164 everywhere (see utils/phone), so addressing is now
+// only about the per-channel envelope: WhatsApp wants a 'whatsapp:' prefix, SMS
+// and voice want the bare number. The normalization itself lives in one place.
+const { DEFAULT_COUNTRY_CODE, toE164 } = require('../../utils/phone');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
-
-/**
- * Plain E.164 form, used by SMS and voice.
- * Returns null when the value cannot be made into a dialable number, so the
- * caller records a SKIPPED attempt instead of handing Twilio junk.
- */
-function toE164(phoneNumber) {
-  if (!phoneNumber) return null;
-
-  const value = phoneNumber.toString().trim().replace(/^whatsapp:/, '');
-  if (value.startsWith('+')) return value;
-
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return null;
-
-  return digits.length > 10
-    ? `+${digits}`
-    : `+${DEFAULT_COUNTRY_CODE}${digits}`;
-}
 
 /** 'whatsapp:+91...' form, which is what the WhatsApp API expects. */
 function toWhatsAppAddress(phoneNumber) {

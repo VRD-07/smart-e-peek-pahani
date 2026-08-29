@@ -171,14 +171,16 @@ describe('locationValidator — outside the Gat', () => {
     expect(result.insideGat).toBe(false);
   });
 
-  it('14. should never route an outside point to REVIEW', () => {
+  it('14. should never route an outside point to REVIEW, but assign OUTSIDE_BOUNDARY reasonCode with distance', () => {
     for (const metresOutside of [1, 5, 12, 40]) {
       const result = validateLocation(
         insideNorthEdge(ORDINARY_GAT, -metresOutside),
         ORDINARY_GAT
       );
       expect(result.status).toBe('FAIL');
-      expect(result.reasonCode).toBeUndefined();
+      expect(result.reasonCode).toBe('OUTSIDE_BOUNDARY');
+      expect(result.distanceFromBoundary).toBeGreaterThan(0);
+      expect(result.reason).toContain('Outside Gat boundary by approximately');
     }
   });
 });

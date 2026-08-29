@@ -134,6 +134,22 @@ const submissionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ValidationResult',
   },
+  // ---- Officer override ----
+  //
+  // Set when an officer approves or rejects a filing by hand, overriding what the
+  // validation gate decided. The ValidationResult is left untouched: it records
+  // what the automated checks found, and an override is a human disagreeing with
+  // that, not evidence that the checks ran differently.
+  //
+  // Absent on everything the gate decided on its own, which is what distinguishes
+  // a VALID filing that passed from one an officer accepted despite a flag.
+  reviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Officer',
+  },
+  reviewedAt: {
+    type: Date,
+  },
 }, {
   timestamps: true,
 });

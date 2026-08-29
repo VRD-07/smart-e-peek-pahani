@@ -244,8 +244,73 @@ const listSubmissions = async (req, res) => {
   });
 };
 
+/**
+ * Officer override of a validation outcome.
+ *
+ * PATCH /api/submissions/:id/status  { status: 'VALID' | 'INVALID' }
+ *
+ * The validation gate is deterministic and therefore sometimes wrong about a real
+ * field: a GPS fix that drifted outside a boundary, a photo the vision model read
+ * as the wrong crop. This is the human word on it, and it is the only way a filing
+ * leaves REVIEW.
+ *
+ * 'REJECTED' is accepted as a synonym for INVALID. The dashboard has always shown
+ * INVALID as "Rejected" to officers, so the word they use is the word the API takes.
+ */
+const OVERRIDE_STATUSES = {
+  VALID: 'VALID',
+  INVALID: 'INVALID',
+  REJECTED: 'INVALID',
+};
+
+const updateSubmissionStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return errorResponse(res, 'Invalid submission id', 'VALIDATION_ERROR', 400);
+  }
+
+  if (!status) {
+    return errorResponse(res, 'Status is required', 'VALIDATION_ERROR', 400);
+  }
+
+  const resolved = OVERRIDE_STATUSES[status.toString().trim().toUpperCase()];
+
+  if (!resolved) {
+    return errorResponse(
+      res,
+      `Unsupported override status: ${status}. Expected one of ${Object.keys(OVERRIDE_STATUSES).join(', ')}`,
+      'VALIDATION_ERROR',
+      400,
+    );
+  }
+
+  const submission = await Submission.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        status: resolved,
+        reviewedBy: req.user?.officerId || null,
+        reviewedAt: new Date(),
+      },
+    },
+    { returnDocument: 'after' },
+  )
+    .populate('farmerId', 'name phoneNumber preferredLanguage')
+    .populate('gatId', 'gatNumber village district center boundary')
+    .populate('validationResultId', 'overallStatus reasons checks');
+
+  if (!submission) {
+    return errorResponse(res, 'Submission not found', 'SUBMISSION_NOT_FOUND', 404);
+  }
+
+  return successResponse(res, `Submission marked ${resolved}`, submission);
+};
+
 module.exports = {
   createSubmission,
   getSubmission,
   listSubmissions,
+  updateSubmissionStatus,
 };

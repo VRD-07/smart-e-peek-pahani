@@ -7,6 +7,7 @@ const { runCalamityMatching } = require('../relief/calamityMatchingService');
 const { runEscalation } = require('../notifications/escalationService');
 const { NOTIFICATION_TYPES } = require('../notifications/constants');
 const { cropYear } = require('../survey/constants');
+const { DEMO_FARMER_PHONE } = require('../../../scripts/seedDemoGats');
 
 /**
  * Calculates planar area in hectares for a GeoJSON ring [[lng, lat], ...]
@@ -90,7 +91,7 @@ async function seedNewGat({
   coordinates,
   registeredArea = null,
   cropTypes = ['soybean', 'cotton', 'wheat', 'sugarcane'],
-  farmerPhoneNumber = '1234567890'
+  farmerPhoneNumber = DEMO_FARMER_PHONE
 }) {
   const finalGatNumber = gatNumber || `DEMO-${Date.now().toString().slice(-4)}`;
   const polyCoords = normalizeCoordinates(coordinates);
@@ -139,19 +140,36 @@ async function seedNewGat({
 
 /**
  * Helper to ensure a demo farmer and demo Gats exist
+ *
+ * Re-seeds when a Gat is missing its polygon as well as when there are no Gats at
+ * all. A boundary-less Gat is worse than an absent one: every scenario below reads
+ * `center.latitude`, and the location check fails on a missing polygon with a
+ * message about invalid geometry rather than anything a demo can explain.
  */
 async function getDemoContext() {
-  let farmer = await Farmer.findOne({ phoneNumber: '1234567890' }).populate('associatedGats');
+  const isUsable = (gats) => gats.length > 0
+    && gats.every(g => g.center?.latitude != null && g.boundary?.coordinates?.length);
+
+  let farmer = await Farmer.findOne({ phoneNumber: DEMO_FARMER_PHONE }).populate('associatedGats');
   let gats = await Gat.find({});
 
-  if (!farmer || gats.length === 0) {
+  if (!farmer || !isUsable(gats)) {
     const { seed } = require('../../../scripts/seedDemoGats');
     await seed(true);
-    farmer = await Farmer.findOne({ phoneNumber: '1234567890' }).populate('associatedGats');
+    farmer = await Farmer.findOne({ phoneNumber: DEMO_FARMER_PHONE }).populate('associatedGats');
     gats = await Gat.find({});
   }
 
   return { farmer, gats };
+}
+
+/** A point the given distance due west of a Gat's centre, in WGS84 degrees. */
+function pointWestOf(center, meters) {
+  const metersPerDegreeLng = 111320 * Math.cos((center.latitude * Math.PI) / 180);
+  return {
+    latitude: center.latitude,
+    longitude: center.longitude - meters / metersPerDegreeLng,
+  };
 }
 
 /**
@@ -165,6 +183,17 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
     targetGat = scenario === 'REVIEW_BOUNDARY_EDGE'
       ? (gats.find(g => g.gatNumber === '106') || gats[0])
       : gats[0];
+  }
+
+  if (!targetGat) {
+    throw new Error('No Gats available — seed a Gat before triggering a scenario');
+  }
+
+  // Every scenario positions its GPS point relative to the parcel, so a Gat with
+  // no geometry cannot produce a meaningful demo. Said plainly here rather than as
+  // a TypeError on `center.latitude` three lines down.
+  if (targetGat.center?.latitude == null || !targetGat.boundary?.coordinates?.length) {
+    throw new Error(`Gat ${targetGat.gatNumber} has no boundary or center — re-seed it before triggering a scenario`);
   }
 
   const baseImage = {
@@ -220,6 +249,23 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
       declaredCrop = 'soybean';
       registeredArea = (targetGat.registeredArea || 1.0) + 15.0; // 15ha over
       break;
+
+    case 'REJECTED_OUT_OF_BOUNDS': {
+      // A point genuinely 5km west of the parcel — far enough that no GPS error
+      // could explain it, which is what makes the distance in the reply the point
+      // of the demo rather than the rejection itself.
+      const far = pointWestOf(targetGat.center, 5000);
+      location = {
+        latitude: far.latitude,
+        longitude: far.longitude,
+        source: 'WEB_GPS',
+        receivedAt: new Date(),
+        accuracy: 5
+      };
+      declaredCrop = 'soybean';
+      registeredArea = 0.5;
+      break;
+    }
 
     case 'REJECTED_CROP_MISMATCH':
       // Declared crop is cotton while vision AI classifies as soybean
@@ -320,13 +366,11 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
   };
 }
 
-const { runEscalation, sendOnChannel } = require('../notifications/escalationService');
-
 /**
- * Trigger multi-channel escalation directly
+ * Trigger escalation demo up to the requested channel (or specific channel)
  */
 async function triggerEscalationDemo({
-  phoneNumber = '1234567890',
+  phoneNumber = DEMO_FARMER_PHONE,
   channel = 'SMS',
   type = NOTIFICATION_TYPES.DEADLINE_REMINDER,
   language = 'mr'
@@ -339,26 +383,19 @@ async function triggerEscalationDemo({
     SMS: 'ई-पीक पाहणी: मुदत संपत आहे. नोंदणी करा.'
   };
 
-  const targetChannel = channel || 'SMS';
+  const targetPhoneNumber = phoneNumber || (farmer ? farmer.phoneNumber : DEMO_FARMER_PHONE);
 
-  // Send directly on the requested fallback channel
-  const result = await sendOnChannel({
-    channel: targetChannel,
-    phoneNumber: phoneNumber || farmer.phoneNumber || '1234567890',
-    farmerId: farmer._id,
+  const result = await runEscalation({
+    phoneNumber: targetPhoneNumber,
+    farmerId: farmer ? farmer._id : null,
     type,
     dedupeKey,
     language,
-    body: bodies[targetChannel] || bodies.SMS
-  });
+    bodies,
+    force: true
+  }, { upToChannel: channel });
 
-  return {
-    action: result.status,
-    channel: targetChannel,
-    recipient: phoneNumber,
-    log: result.log,
-    reason: result.reason
-  };
+  return result;
 }
 
 /**
@@ -367,10 +404,11 @@ async function triggerEscalationDemo({
 async function triggerChaosMode() {
   const scenarios = [
     'VALID',
-    'VALID',
     'REVIEW_BOUNDARY_EDGE',
     'REVIEW_AREA_OVERALLOCATION',
+    'REJECTED_OUT_OF_BOUNDS',
     'REJECTED_CROP_MISMATCH',
+    'VALID',
     'CALAMITY_MATCH'
   ];
 
@@ -397,3 +435,4 @@ module.exports = {
   triggerChaosMode,
   normalizeCoordinates
 };
+
