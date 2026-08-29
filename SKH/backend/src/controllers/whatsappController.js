@@ -50,19 +50,8 @@ async function handleWebhook(req, res) {
       { returnDocument: 'after', upsert: true }
     );
 
-    // 1.5 Fetch Farmer (or auto-register for WhatsApp flow)
+    // 1.5 Fetch Farmer
     let farmer = await findFarmerByPhone(phoneNumber, { populate: 'associatedGats' });
-    if (!farmer) {
-      const { autoRegisterFarmer } = require('./authController');
-      try {
-        farmer = await autoRegisterFarmer(phoneNumber, { name: 'WhatsApp Farmer' });
-        if (farmer && farmer._id) {
-          farmer = await findFarmerByPhone(phoneNumber, { populate: 'associatedGats' });
-        }
-      } catch (err) {
-        console.warn('[WhatsApp Controller] Auto-register farmer notice:', err.message);
-      }
-    }
 
     // 1.55 Adopt the farmer's stored language preference onto a fresh session.
     //
