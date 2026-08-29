@@ -44,7 +44,11 @@ api.interceptors.response.use(
             ? '/officer/login'
             : '/login';
 
-          if (window.location.pathname !== loginPath) {
+          if (
+            window.location.pathname !== loginPath &&
+            !window.location.pathname.startsWith('/submission') &&
+            !window.location.pathname.startsWith('/submit')
+          ) {
             window.location.href = loginPath;
           }
         }

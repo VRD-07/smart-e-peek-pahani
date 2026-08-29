@@ -19,13 +19,18 @@ const multerHandler = (req, res, next) => {
         return errorResponse(res, 'Image file too large (max 5MB)', 'FILE_TOO_LARGE', 400);
       }
       return errorResponse(res, err.message, 'UPLOAD_ERROR', 400);
-    } else if (err) {
-      return errorResponse(res, err.message, 'UPLOAD_ERROR', 400);
     }
     next();
   });
 };
 
-router.post('/image', protect, multerHandler, uploadImage);
+const optionalAuth = (req, res, next) => {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    return protect(req, res, next);
+  }
+  next();
+};
+
+router.post('/image', optionalAuth, multerHandler, uploadImage);
 
 module.exports = router;
