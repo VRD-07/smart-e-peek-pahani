@@ -38,11 +38,77 @@ export const DemoControlPanel = () => {
     coordinatesText: '19.9010, 74.4940\n19.9030, 74.4940\n19.9030, 74.4965\n19.9010, 74.4965'
   });
 
-  const appendLog = (title, data) => {
+  const getExplanation = (data, title = '') => {
+    if (!data) return null;
+    const str = typeof data === 'string' ? data : JSON.stringify(data);
+    const errText = (data.details?.error || data.error || data.message || str || '').toLowerCase();
+
+    if (errText.includes('50 daily messages limit') || errText.includes('exceeded the 50 daily')) {
+      return {
+        severity: 'warning',
+        badge: 'Twilio Trial Quota (50/day)',
+        title: 'Daily Message Limit Exceeded on Twilio Trial',
+        cause: 'Free Twilio trial accounts allow a maximum of 50 outbound WhatsApp/SMS messages per 24-hour cycle.',
+        solution: 'To test and demonstrate without message limits, set NOTIFICATION_PROVIDER=mock in backend .env (which simulates all channels in console), or wait 24 hours for the Twilio counter to reset.'
+      };
+    }
+    if (errText.includes('contentsid required') || errText.includes('contentsid')) {
+      return {
+        severity: 'warning',
+        badge: '24h WhatsApp Session Closed',
+        title: 'Inbound WhatsApp Message Required First',
+        cause: 'Twilio Sandbox requires an active 24-hour conversation window opened by the recipient before outbound freeform text can be delivered.',
+        solution: 'Open WhatsApp on your mobile phone, message "Hi" or your "join <code>" to +1 415 523 8886, then click WhatsApp Alert again.'
+      };
+    }
+    if (errText.includes('is unverified') || errText.includes('trial accounts may only make calls to verified')) {
+      return {
+        severity: 'warning',
+        badge: 'Unverified Twilio Number',
+        title: 'Trial Account Requires Verified Caller ID',
+        cause: 'Twilio trial accounts can only dial phone numbers registered under Verified Caller IDs.',
+        solution: 'Add your phone number under Twilio Console > Phone Numbers > Verified Caller IDs, and type that number in the Live Phone Target box above.'
+      };
+    }
+    if (errText.includes('sender_not_configured')) {
+      return {
+        severity: 'error',
+        badge: 'Missing Sender in .env',
+        title: 'Twilio Channel Sender Not Configured',
+        cause: 'TWILIO_SMS_NUMBER or TWILIO_VOICE_NUMBER is unset in backend environment variables.',
+        solution: 'Set TWILIO_SMS_NUMBER and TWILIO_VOICE_NUMBER in your backend .env file to your Twilio phone number.'
+      };
+    }
+    if (errText.includes('channel could not find a user') || errText.includes('63015')) {
+      return {
+        severity: 'warning',
+        badge: 'Sandbox Join Required',
+        title: 'Handset Has Not Joined WhatsApp Sandbox',
+        cause: 'Twilio cannot message WhatsApp numbers that have not joined the Sandbox.',
+        solution: 'Send "join <sandbox-code>" from your phone to +1 415 523 8886, wait for confirmation, and retry.'
+      };
+    }
+
+    if (data.status === 'SENT' || data.success === true) {
+      return {
+        severity: 'success',
+        badge: 'Dispatched Successfully',
+        title: 'Notification Sent via Provider',
+        cause: `Message SID / Call ID: ${data.details?.providerMessageId || data.steps?.[0]?.channel || 'Recorded in DB'}`,
+        solution: 'The carrier received the dispatch request and is delivering it to the recipient.'
+      };
+    }
+
+    return null;
+  };
+
+  const appendLog = (title, data, type = 'info') => {
     setLogOutput({
       title,
+      type,
       timestamp: new Date().toLocaleTimeString(),
-      data
+      data,
+      explanation: getExplanation(data, title)
     });
   };
 
@@ -67,9 +133,9 @@ export const DemoControlPanel = () => {
         coordinates: coords
       });
 
-      appendLog('✅ Seeded Murshatpur Gat Boundary', res.data.data);
+      appendLog('✅ Seeded Murshatpur Gat Boundary', res.data.data, 'success');
     } catch (err) {
-      appendLog('❌ Gat Seeding Failed', err.response?.data || err.message);
+      appendLog('❌ Gat Seeding Failed', err.response?.data || err.message, 'error');
     } finally {
       setLoadingAction(null);
     }
@@ -79,9 +145,9 @@ export const DemoControlPanel = () => {
     setLoadingAction(scenario);
     try {
       const res = await api.post('/demo/trigger-submission', { scenario });
-      appendLog(`🎯 Scenario: ${scenario}`, res.data.data);
+      appendLog(`🎯 Scenario: ${scenario}`, res.data.data, 'success');
     } catch (err) {
-      appendLog(`❌ Scenario Failed: ${scenario}`, err.response?.data || err.message);
+      appendLog(`❌ Scenario Failed: ${scenario}`, err.response?.data || err.message, 'error');
     } finally {
       setLoadingAction(null);
     }
@@ -95,9 +161,13 @@ export const DemoControlPanel = () => {
         payload.phoneNumber = targetPhone.trim();
       }
       const res = await api.post('/demo/trigger-escalation', payload);
-      appendLog(`📢 Live Escalation Dispatched: ${channel}`, res.data.data);
+      const isSuccess = res.data?.data?.success ?? (res.data?.data?.status === 'SENT');
+      const title = isSuccess
+        ? `✅ Live Dispatch Sent: ${channel}`
+        : `❌ Live Dispatch Failed: ${channel}`;
+      appendLog(title, res.data.data, isSuccess ? 'success' : 'error');
     } catch (err) {
-      appendLog(`❌ Escalation Failed: ${channel}`, err.response?.data || err.message);
+      appendLog(`❌ Escalation Request Failed: ${channel}`, err.response?.data || err.message, 'error');
     } finally {
       setLoadingAction(null);
     }
@@ -541,18 +611,51 @@ export const DemoControlPanel = () => {
                 )}
               </div>
 
-              <div className="flex-1 bg-slate-950 rounded-xl p-4 overflow-y-auto font-mono text-xs text-slate-300 border border-slate-800">
+              <div className="flex-1 bg-slate-950 rounded-xl p-4 overflow-y-auto font-mono text-xs text-slate-300 border border-slate-800 space-y-3">
                 {logOutput ? (
-                  <div className="space-y-3">
-                    <p className="font-bold text-emerald-400 border-b border-slate-800 pb-1.5">{logOutput.title}</p>
-                    <pre className="text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all">
-                      {JSON.stringify(logOutput.data, null, 2)}
-                    </pre>
-                  </div>
+                  <>
+                    <div className={`p-3 rounded-xl border flex flex-col gap-1.5 font-sans ${
+                      logOutput.type === 'error'
+                        ? 'bg-red-950/40 border-red-500/50 text-red-200'
+                        : logOutput.type === 'success'
+                        ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                        : 'bg-slate-900 border-slate-700 text-slate-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs">{logOutput.title}</span>
+                        {logOutput.explanation?.badge && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold ${
+                            logOutput.explanation.severity === 'warning' || logOutput.explanation.severity === 'error'
+                              ? 'bg-amber-900/60 text-amber-300 border border-amber-600/50'
+                              : 'bg-emerald-900/60 text-emerald-300 border border-emerald-600/50'
+                          }`}>
+                            {logOutput.explanation.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {logOutput.explanation && (
+                        <div className="mt-1 pt-2 border-t border-slate-700/60 space-y-1 text-xs">
+                          <p className="font-semibold text-slate-100">{logOutput.explanation.title}</p>
+                          <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-medium">Cause:</span> {logOutput.explanation.cause}</p>
+                          <p className="text-[11px] text-amber-300 bg-amber-950/30 p-2 rounded-lg border border-amber-500/30">
+                            <span className="font-bold text-amber-400">💡 Solution:</span> {logOutput.explanation.solution}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">Raw Pipeline Data / Response</span>
+                      <pre className="text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        {JSON.stringify(logOutput.data, null, 2)}
+                      </pre>
+                    </div>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-slate-500 text-center p-4">
                     <p className="text-xs">Click any trigger on the left to execute live backend pipeline logic.</p>
-                    <p className="text-[10px] mt-1 text-slate-600">Results will stream here in real time.</p>
+                    <p className="text-[10px] mt-1 text-slate-600">Results and explanations will stream here in real time.</p>
                   </div>
                 )}
               </div>
