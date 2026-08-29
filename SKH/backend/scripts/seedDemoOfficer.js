@@ -26,7 +26,7 @@ async function seed(skipConnect = false) {
     const officer = await Officer.findOneAndUpdate(
       { employeeId: DEMO_OFFICER.employeeId },
       { $set: { ...DEMO_OFFICER, passwordHash } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     console.log(`Seeded officer ${officer.employeeId} (${officer.name})`);

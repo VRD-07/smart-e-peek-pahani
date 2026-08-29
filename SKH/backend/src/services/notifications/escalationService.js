@@ -177,7 +177,7 @@ async function sendOnChannel({
   const log = await NotificationLog.findOneAndUpdate(
     { phoneNumber, type, dedupeKey, channel },
     { $set: logEntry, $inc: { attempts: 1 } },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 
   return sent

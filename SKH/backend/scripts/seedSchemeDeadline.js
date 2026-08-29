@@ -43,7 +43,7 @@ async function seed(skipConnect = false) {
     const deadline = await SchemeDeadline.findOneAndUpdate(
       { season: DEMO_DEADLINE.season, year, district: DEMO_DEADLINE.district },
       { $set: { ...DEMO_DEADLINE, year, seasonStart, deadlineDate, isActive: true } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     console.log(`Seeded ${deadline.season} ${deadline.year} deadline for ${deadline.district}`);

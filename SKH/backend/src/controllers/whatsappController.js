@@ -47,7 +47,7 @@ async function handleWebhook(req, res) {
     let currentSession = await WhatsAppSession.findOneAndUpdate(
       { phoneNumber },
       { $setOnInsert: { phoneNumber, state: STATES.START } },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
 
     // 1.5 Fetch Farmer

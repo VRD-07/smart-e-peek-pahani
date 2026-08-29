@@ -78,7 +78,7 @@ async function seed(skipConnect = false) {
       const gat = await Gat.findOneAndUpdate(
         { gatNumber: coord.id },
         { $set: gatData },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       gatIds.push(gat._id);

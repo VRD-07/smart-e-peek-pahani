@@ -205,7 +205,7 @@ async function processZone(zone, { notify = true } = {}) {
         },
         $setOnInsert: { matchedAt: new Date() },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
 

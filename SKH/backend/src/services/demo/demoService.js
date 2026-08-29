@@ -119,7 +119,7 @@ async function seedNewGat({
   const gat = await Gat.findOneAndUpdate(
     { gatNumber: finalGatNumber },
     { $set: gatData },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 
   let farmer = await Farmer.findOne({ phoneNumber: farmerPhoneNumber });
