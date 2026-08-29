@@ -431,7 +431,7 @@ async function triggerEscalationDemo({
         error: res.log?.error
       }
     ],
-    channelsAttempted: isSuccess ? [normalizedChannel] : [],
+    channelsAttempted: [normalizedChannel],
     reachedVia: isSuccess ? normalizedChannel : null,
     exhausted: !isSuccess,
     finalAction: res.status,

@@ -104,9 +104,23 @@ async function handleWebhook(req, res) {
       } else {
         parsedMessage.data = loc;
       }
-    } else if (parsedMessage.type === MESSAGE_TYPES.TEXT && CROP_INPUT_STATES.includes(currentSession.state)) {
-      const { extractCrop } = require('../services/voice/cropExtraction');
-      parsedMessage.data.extraction = extractCrop(parsedMessage.data.text);
+    } else if (parsedMessage.type === MESSAGE_TYPES.TEXT) {
+      const { isVerificationQuery, verifySchemeOrCalamity } = require('../services/verification/schemeVerificationService');
+      const verifyCheck = isVerificationQuery(parsedMessage.data?.text);
+      if (verifyCheck.isQuery) {
+        const lang = verifyCheck.language || currentSession.language || farmer?.preferredLanguage || 'mr';
+        const verifyResult = await verifySchemeOrCalamity(verifyCheck.query, lang);
+
+        const twiml = new twilio.twiml.MessagingResponse();
+        twiml.message(verifyResult.reply);
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        return res.end(twiml.toString());
+      }
+
+      if (CROP_INPUT_STATES.includes(currentSession.state)) {
+        const { extractCrop } = require('../services/voice/cropExtraction');
+        parsedMessage.data.extraction = extractCrop(parsedMessage.data.text);
+      }
     } else if (parsedMessage.type === MESSAGE_TYPES.IMAGE || parsedMessage.type === MESSAGE_TYPES.VOICE) {
       try {
         const media = await processMedia(parsedMessage.data.url, parsedMessage.data.mimeType);

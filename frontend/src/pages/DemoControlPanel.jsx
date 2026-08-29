@@ -22,7 +22,12 @@ import {
   RotateCcw,
   Activity,
   HardDrive,
-  Camera
+  Camera,
+  Search,
+  Copy,
+  FileCheck,
+  ShieldCheck,
+  Layers
 } from 'lucide-react';
 import api from '../services/api';
 import { db } from '../storage/db';
@@ -32,6 +37,7 @@ export const DemoControlPanel = () => {
   const [logOutput, setLogOutput] = useState(null);
   const [offlineCount, setOfflineCount] = useState(0);
   const [systemHealth, setSystemHealth] = useState(null);
+  const [schemeQuery, setSchemeQuery] = useState('is Kharif real');
 
   // Custom phone number for live demonstration to judges
   const [targetPhone, setTargetPhone] = useState('+91');
@@ -269,6 +275,35 @@ export const DemoControlPanel = () => {
       appendLog('🔄 Drained Offline Queue to Backend', { syncedCount: synced });
     } catch (err) {
       appendLog('❌ Drain Failed', err.message);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleVerifySchemeQuery = async (overrideQuery = null) => {
+    const q = overrideQuery || schemeQuery;
+    setLoadingAction('verify-scheme');
+    try {
+      const res = await api.post('/demo/verify-scheme', { query: q, language: 'mr' });
+      appendLog(
+        res.data.data?.matched ? '🏛️ Scheme / Calamity Status: VERIFIED & CONFIRMED' : '⚠️ Scheme / Calamity Status: NO RECORD FOUND',
+        res.data.data,
+        res.data.data?.matched ? 'success' : 'warning'
+      );
+    } catch (err) {
+      appendLog('❌ Scheme Verification Failed', err.response?.data || err.message, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleTriggerCoordinatedDuplicate = async () => {
+    setLoadingAction('trigger-duplicate');
+    try {
+      const res = await api.post('/demo/trigger-duplicate');
+      appendLog('🚨 COORDINATED DUPLICATE DETECTED (SUSPECTED_DUPLICATE)', res.data.data, 'warning');
+    } catch (err) {
+      appendLog('❌ Trigger Coordinated Duplicate Failed', err.response?.data || err.message, 'error');
     } finally {
       setLoadingAction(null);
     }
@@ -700,7 +735,123 @@ export const DemoControlPanel = () => {
               </div>
             </div>
 
-            {/* Section 3: Gat Boundary Seeder & Offline PWA Queue */}
+            {/* Section 3: Misinformation Verification & Coordinated Submission Detection */}
+            <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 shadow-lg space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <h2 className="text-base font-bold text-white">3. Scheme Truth Verification & Coordinated Fraud Detection</h2>
+                </div>
+                <span className="text-[11px] text-emerald-400 font-mono">Real-time Trust & Integrity</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Task 1: Scheme / Calamity Verification */}
+                <div className="bg-slate-900/80 border border-slate-700/60 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-white flex items-center gap-1.5">
+                        <Search className="w-4 h-4 text-cyan-400" />
+                        Query Scheme / Calamity Status
+                      </span>
+                      <span className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded font-mono">
+                        WhatsApp Bot Intent
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Tests bot verification against official CalamityZone and SchemeDeadline database records without guessing.
+                    </p>
+
+                    <div className="space-y-1.5 pt-1">
+                      <input
+                        type="text"
+                        value={schemeQuery}
+                        onChange={(e) => setSchemeQuery(e.target.value)}
+                        placeholder="e.g. is Kharif real, अतिवृष्टी तपासा..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      />
+                      <div className="flex flex-wrap gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => { setSchemeQuery('is Kharif real'); handleVerifySchemeQuery('is Kharif real'); }}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700"
+                        >
+                          "is Kharif real"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setSchemeQuery('अतिवृष्टी मुर्शदपूर तपासा'); handleVerifySchemeQuery('अतिवृष्टी मुर्शदपूर तपासा'); }}
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700"
+                        >
+                          "अतिवृष्टी मुर्शदपूर"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setSchemeQuery('Fake Solar Scheme'); handleVerifySchemeQuery('Fake Solar Scheme'); }}
+                          className="px-2 py-0.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded border border-red-800"
+                        >
+                          "Fake Solar (Negative Test)"
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleVerifySchemeQuery()}
+                    disabled={loadingAction === 'verify-scheme'}
+                    className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2"
+                  >
+                    {loadingAction === 'verify-scheme' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    Query Scheme Status
+                  </button>
+                </div>
+
+                {/* Task 2: Coordinated Submission Detection */}
+                <div className="bg-slate-900/80 border border-slate-700/60 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-white flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-amber-400" />
+                        Coordinated Submission Detection
+                      </span>
+                      <span className="text-[9px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-mono">
+                        Perceptual Hashing (dHash)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Submits duplicate crop photo across two different phone numbers & Gats in quick succession. Confirms the 2nd is flagged <strong className="text-amber-300">SUSPECTED_DUPLICATE</strong>.
+                    </p>
+
+                    <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg text-[11px] space-y-1 font-mono text-slate-300">
+                      <div className="text-[10px] text-slate-400">DEMO SEQUENCE:</div>
+                      <div>1. Sub #1: Ramesh (+919876500001) on Gat 101 ➔ VALID</div>
+                      <div>2. Sub #2: Suresh (+919876500002) on Gat 102 ➔ REVIEW (Duplicate)</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleTriggerCoordinatedDuplicate}
+                      disabled={loadingAction === 'trigger-duplicate'}
+                      className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2"
+                    >
+                      {loadingAction === 'trigger-duplicate' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                      Trigger Coordinated Submission
+                    </button>
+                    <Link
+                      to="/officer"
+                      target="_blank"
+                      className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-700 transition-colors"
+                    >
+                      <span>View in Officer Dashboard</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Gat Boundary Seeder & Offline PWA Queue */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               
               {/* Gat Boundary Seeder */}

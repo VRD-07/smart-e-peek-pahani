@@ -41,6 +41,11 @@ const AREA_REASON_CODES = {
   AREA_OVERALLOCATION: 'AREA_OVERALLOCATION',
 };
 
+const DUPLICATE_REASON_CODES = {
+  // Near-identical crop photo submitted across different farmers or different Gats
+  SUSPECTED_DUPLICATE: 'SUSPECTED_DUPLICATE',
+};
+
 // Slack allowed on the area sum, in hectares.
 //
 // Areas arrive converted from गुंठे and एकर, so a farmer filing three entries that
@@ -81,6 +86,7 @@ module.exports = {
   BOUNDARY_BUFFER_PARCEL_FRACTION,
   LOCATION_REASON_CODES,
   AREA_REASON_CODES,
+  DUPLICATE_REASON_CODES,
   AREA_TOLERANCE_HECTARES,
   ACTIVE_ALLOCATION_STATUSES,
   nearBoundaryThreshold,

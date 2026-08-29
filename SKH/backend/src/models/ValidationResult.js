@@ -77,6 +77,21 @@ const validationResultSchema = new mongoose.Schema({
       // check's is: a code that outran the schema should not throw.
       reasonCode: String,
     },
+    duplicate: {
+      status: { type: String, enum: ['PASS', 'REVIEW', 'SKIPPED'] },
+      reasonCode: String, // 'SUSPECTED_DUPLICATE'
+      perceptualHash: String,
+      matchedSubmissionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Submission',
+      },
+      similarity: Number,
+      hammingDistance: Number,
+      matchedFarmerPhone: String,
+      matchedGatNumber: String,
+      matchedVillage: String,
+      reason: String,
+    },
   },
   reasons: [{
     type: String,

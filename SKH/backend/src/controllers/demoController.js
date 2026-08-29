@@ -118,6 +118,159 @@ const handleCheckSystemHealth = async (req, res) => {
   }
 };
 
+const handleVerifyScheme = async (req, res) => {
+  try {
+    const { query, language } = req.body;
+    if (!query) {
+      return errorResponse(res, 'Query parameter is required', 'VALIDATION_ERROR', 400);
+    }
+    const { verifySchemeOrCalamity } = require('../services/verification/schemeVerificationService');
+    const result = await verifySchemeOrCalamity(query, language || 'mr');
+    return successResponse(res, 'Scheme/Calamity verification executed', result);
+  } catch (error) {
+    return errorResponse(res, error.message, 'VERIFY_SCHEME_ERROR', 500);
+  }
+};
+
+const handleTriggerCoordinatedDuplicate = async (req, res) => {
+  try {
+    const { computePerceptualHash } = require('../services/image/perceptualHashService');
+    const { runValidationEngine } = require('../services/validation/validationEngine');
+    const Farmer = require('../models/Farmer');
+    const Gat = require('../models/Gat');
+    const Submission = require('../models/Submission');
+
+    // 1. Ensure 2 Gats exist
+    let gat1 = await Gat.findOne({ gatNumber: '101' });
+    let gat2 = await Gat.findOne({ gatNumber: '102' });
+    if (!gat1 || !gat2) {
+      const gats = await Gat.find({}).limit(2);
+      gat1 = gats[0] || (await Gat.create({
+        gatNumber: '101',
+        village: 'Murshatpur',
+        district: 'Nashik',
+        registeredArea: 2.5,
+        boundary: { type: 'Polygon', coordinates: [[[74.49, 19.90], [74.50, 19.90], [74.50, 19.91], [74.49, 19.91], [74.49, 19.90]]] },
+        center: { latitude: 19.905, longitude: 74.495 }
+      }));
+      gat2 = gats[1] || (await Gat.create({
+        gatNumber: '102',
+        village: 'Murshatpur',
+        district: 'Nashik',
+        registeredArea: 1.8,
+        boundary: { type: 'Polygon', coordinates: [[[74.51, 19.90], [74.52, 19.90], [74.52, 19.91], [74.51, 19.91], [74.51, 19.90]]] },
+        center: { latitude: 19.905, longitude: 74.515 }
+      }));
+    }
+
+    // 2. Ensure 2 Farmers exist with different phone numbers
+    let farmer1 = await Farmer.findOne({ phoneNumber: '+919876500001' });
+    if (!farmer1) {
+      farmer1 = await Farmer.create({
+        name: 'Ramesh Patil',
+        phoneNumber: '+919876500001',
+        associatedGats: [gat1._id]
+      });
+    }
+
+    let farmer2 = await Farmer.findOne({ phoneNumber: '+919876500002' });
+    if (!farmer2) {
+      farmer2 = await Farmer.create({
+        name: 'Suresh Shinde',
+        phoneNumber: '+919876500002',
+        associatedGats: [gat2._id]
+      });
+    }
+
+    // 3. Demo photo (deterministic crop photo sample)
+    const samplePhotoUrl = 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=400';
+    const samplePHash = await computePerceptualHash(samplePhotoUrl);
+
+    // 4. Create First Legitimate Submission from Farmer 1
+    const sub1 = await Submission.create({
+      clientSubmissionId: `sub_legit_${Date.now()}`,
+      farmerId: farmer1._id,
+      gatId: gat1._id,
+      source: 'WEB',
+      season: 'KHARIF',
+      cropYear: 2026,
+      registeredArea: 1.5,
+      crop: {
+        declaredCrop: 'soybean',
+        language: 'mr'
+      },
+      location: {
+        latitude: gat1.center?.latitude || 19.905,
+        longitude: gat1.center?.longitude || 74.495,
+        source: 'WEB_GPS'
+      },
+      image: {
+        url: samplePhotoUrl,
+        mimeType: 'image/jpeg',
+        size: 150000,
+        perceptualHash: samplePHash,
+        metadata: { exifPresent: true, gpsPresent: true }
+      },
+      status: 'PENDING_VALIDATION'
+    });
+
+    const val1 = await runValidationEngine(sub1, farmer1, gat1);
+
+    // 5. Create Second Coordinated/Duplicate Submission from Farmer 2 on different Gat
+    const sub2 = await Submission.create({
+      clientSubmissionId: `sub_duplicate_${Date.now() + 1}`,
+      farmerId: farmer2._id,
+      gatId: gat2._id,
+      source: 'WHATSAPP',
+      season: 'KHARIF',
+      cropYear: 2026,
+      registeredArea: 1.2,
+      crop: {
+        declaredCrop: 'soybean',
+        language: 'mr'
+      },
+      location: {
+        latitude: gat2.center?.latitude || 19.905,
+        longitude: gat2.center?.longitude || 74.515,
+        source: 'WHATSAPP'
+      },
+      image: {
+        url: samplePhotoUrl,
+        mimeType: 'image/jpeg',
+        size: 150000,
+        perceptualHash: samplePHash,
+        metadata: { exifPresent: true, gpsPresent: true }
+      },
+      status: 'PENDING_VALIDATION'
+    });
+
+    const val2 = await runValidationEngine(sub2, farmer2, gat2);
+
+    return successResponse(res, 'Coordinated duplicate scenario triggered successfully', {
+      originalSubmission: {
+        id: sub1._id,
+        farmer: farmer1.name,
+        phone: farmer1.phoneNumber,
+        gat: gat1.gatNumber,
+        status: sub1.status
+      },
+      duplicateSubmission: {
+        id: sub2._id,
+        farmer: farmer2.name,
+        phone: farmer2.phoneNumber,
+        gat: gat2.gatNumber,
+        status: sub2.status,
+        reasonCode: val2.checks?.duplicate?.reasonCode,
+        similarity: val2.checks?.duplicate?.similarity,
+        matchedSubmissionId: val2.checks?.duplicate?.matchedSubmissionId,
+        reasons: val2.reasons
+      }
+    }, 201);
+  } catch (error) {
+    return errorResponse(res, error.message, 'COORDINATED_DUPLICATE_ERROR', 500);
+  }
+};
+
 module.exports = {
   handleSeedGat,
   handleTriggerSubmission,
@@ -127,7 +280,9 @@ module.exports = {
   handleRestoreSnapshot,
   handleCreateSnapshot,
   handleListSnapshots,
-  handleCheckSystemHealth
+  handleCheckSystemHealth,
+  handleVerifyScheme,
+  handleTriggerCoordinatedDuplicate
 };
 
 

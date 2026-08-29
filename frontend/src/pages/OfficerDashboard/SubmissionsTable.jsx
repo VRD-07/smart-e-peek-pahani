@@ -144,6 +144,21 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
                       </span>
                     )}
 
+                    {/* Duplicate Photo Detection Flag */}
+                    {sub.validationResultId?.checks?.duplicate?.status === 'REVIEW' && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+                        title={`Matched with prior submission ${sub.validationResultId?.checks?.duplicate?.matchedSubmissionId || ''}`}
+                      >
+                        <span>⚠️ Duplicate Photo</span>
+                        {sub.validationResultId?.checks?.duplicate?.similarity && (
+                          <span className="text-[10px] opacity-80">
+                            ({Math.round(sub.validationResultId.checks.duplicate.similarity * 100)}%)
+                          </span>
+                        )}
+                      </span>
+                    )}
+
                     {/* Marks the outcome as a person's decision rather than the
                         gate's, which is the whole point of keeping reviewedBy. */}
                     {sub.reviewedAt && (
@@ -156,8 +171,27 @@ export const SubmissionsTable = ({ submissions, loading, sortBy, sortOrder, onSo
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                   {new Date(sub.createdAt).toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">
-                  {reasons.length > 0 ? reasons.join('; ') : '—'}
+                <td className="px-4 py-3 text-xs text-gray-700 max-w-xs space-y-1">
+                  {sub.validationResultId?.checks?.duplicate?.status === 'REVIEW' && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 p-2 rounded-lg text-[11px] space-y-0.5">
+                      <p className="font-bold flex items-center gap-1 text-amber-800">
+                        <span>🚨 संशयित नक्कल (Suspected Duplicate)</span>
+                      </p>
+                      <p className="text-[10.5px]">
+                        समान फोटो यापूर्वी <strong>गट {sub.validationResultId.checks.duplicate.matchedGatNumber}</strong> वर फोन <strong>{sub.validationResultId.checks.duplicate.matchedFarmerPhone}</strong> द्वारे सबमिट केला गेला आहे.
+                      </p>
+                      {sub.validationResultId.checks.duplicate.matchedSubmissionId && (
+                        <p className="text-[10px] text-amber-700 font-mono">
+                          मूळ नोंदणी ID: #{String(sub.validationResultId.checks.duplicate.matchedSubmissionId).slice(-6)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {reasons.length > 0 ? (
+                    <div>{reasons.filter(r => !r.toLowerCase().includes('duplicate')).join('; ') || (sub.validationResultId?.checks?.duplicate?.status === 'REVIEW' ? '' : '—')}</div>
+                  ) : (
+                    sub.validationResultId?.checks?.duplicate?.status === 'REVIEW' ? null : '—'
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">

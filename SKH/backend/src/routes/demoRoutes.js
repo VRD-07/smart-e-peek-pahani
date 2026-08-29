@@ -9,7 +9,9 @@ const {
   handleRestoreSnapshot,
   handleCreateSnapshot,
   handleListSnapshots,
-  handleCheckSystemHealth
+  handleCheckSystemHealth,
+  handleVerifyScheme,
+  handleTriggerCoordinatedDuplicate
 } = require('../controllers/demoController');
 
 // Internal demo panel endpoints
@@ -17,6 +19,11 @@ router.post('/seed-gat', handleSeedGat);
 router.post('/trigger-submission', handleTriggerSubmission);
 router.post('/trigger-escalation', handleTriggerEscalation);
 router.post('/chaos', handleChaos);
+
+// Scheme Verification & Coordinated Submission Endpoints
+router.post('/verify-scheme', handleVerifyScheme);
+router.post('/trigger-duplicate', handleTriggerCoordinatedDuplicate);
+router.post('/trigger-coordinated-duplicate', handleTriggerCoordinatedDuplicate);
 
 // Blackout Resilience & Recovery Endpoints
 router.post('/blackout', handleSimulateBlackout);

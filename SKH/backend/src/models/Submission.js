@@ -119,6 +119,7 @@ const submissionSchema = new mongoose.Schema({
     mimeType: String,
     size: Number,
     capturedAt: Date,
+    perceptualHash: String,
     metadata: {
       exifPresent: Boolean,
       gpsPresent: Boolean,

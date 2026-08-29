@@ -36,6 +36,7 @@
     "mongoose": "^9.9.1",
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
+    "sharp": "^0.35.4",
     "twilio": "^6.0.2"
   },
   "devDependencies": {

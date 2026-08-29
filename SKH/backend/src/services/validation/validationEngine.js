@@ -4,6 +4,7 @@ const { validateImage } = require('./imageValidator');
 const { validateCrop } = require('./cropValidator');
 const { validateArea } = require('./areaValidator');
 const { sumOtherActiveArea } = require('./areaAllocation');
+const { computePerceptualHash, checkDuplicatePhoto } = require('../image/perceptualHashService');
 const { getVisionProvider } = require('../ai/visionFactory');
 const ValidationResult = require('../../models/ValidationResult');
 const Submission = require('../../models/Submission');
@@ -27,7 +28,31 @@ const runValidationEngine = async (submission, farmer, gat) => {
   // 6. & 7. Image validation and quality
   const imageCheck = validateImage(submission.image);
 
-  // 8. Crop verification
+  // 8. Perceptual Image Hash & Coordinated Duplicate Detection
+  let duplicateCheck = { status: 'SKIPPED', reason: 'No image provided for duplicate check' };
+  if (submission.image?.url || submission.image?.perceptualHash) {
+    try {
+      let pHash = submission.image.perceptualHash;
+      if (!pHash && submission.image.url) {
+        pHash = await computePerceptualHash(submission.image.url);
+        submission.image.perceptualHash = pHash;
+      }
+
+      if (pHash) {
+        duplicateCheck = await checkDuplicatePhoto({
+          perceptualHash: pHash,
+          currentSubmissionId: submission._id,
+          farmerId: submission.farmerId,
+          gatId: submission.gatId,
+        });
+      }
+    } catch (err) {
+      console.warn('[Validation] Duplicate photo check error:', err.message);
+      duplicateCheck = { status: 'SKIPPED', reason: 'Duplicate check could not be completed' };
+    }
+  }
+
+  // 9. Crop verification
   let cropCheck = { status: 'REVIEW', declaredCrop: submission.crop?.declaredCrop };
   if (imageCheck.status === 'PASS') {
     try {
@@ -54,19 +79,10 @@ const runValidationEngine = async (submission, farmer, gat) => {
     }
   }
 
-  // 9. Timestamp consistency
+  // 10. Timestamp consistency
   const timestampCheck = validateTimestamp(submission.location?.receivedAt);
 
-  // 10. Area allocation.
-  //
-  // Its own check, deliberately — not folded into the Gat or required-fields
-  // check. "The area you claimed does not fit in your parcel" is a different
-  // finding from "we cannot place you inside your parcel", it has its own reason
-  // code, and an officer needs to be able to tell them apart in the dashboard.
-  //
-  // A database failure here must not take the whole validation down: without this
-  // guard a slow query would turn every submission INVALID for a reason that has
-  // nothing to do with the filing.
+  // 11. Area allocation.
   let areaCheck = { status: 'SKIPPED', reason: 'Area check was not run' };
   try {
     const otherActiveArea = await sumOtherActiveArea({
@@ -90,7 +106,7 @@ const runValidationEngine = async (submission, farmer, gat) => {
     };
   }
 
-  // 11. Final rule evaluation
+  // 12. Final rule evaluation
   const mandatoryChecks = [
     identityCheck,
     requiredFieldsCheck,
@@ -98,9 +114,8 @@ const runValidationEngine = async (submission, farmer, gat) => {
     locationCheck,
     imageCheck,
     timestampCheck,
-    // Included so an area REVIEW routes the submission to review. It can never
-    // FAIL, so it cannot reject a filing on arithmetic alone.
-    areaCheck
+    areaCheck,
+    duplicateCheck
   ];
 
   const failed = mandatoryChecks.some(check => check.status === 'FAIL') || cropCheck.status === 'FAIL';
@@ -108,17 +123,20 @@ const runValidationEngine = async (submission, farmer, gat) => {
 
   if (failed) {
     overallStatus = 'FAIL';
-  } else if (cropCheck.status === 'REVIEW' || mandatoryChecks.some(check => check.status === 'REVIEW')) {
+  } else if (
+    cropCheck.status === 'REVIEW' ||
+    duplicateCheck.status === 'REVIEW' ||
+    mandatoryChecks.some(check => check.status === 'REVIEW')
+  ) {
     overallStatus = 'REVIEW';
   }
 
   // Collect reasons
   const reasons = [];
-  [identityCheck, requiredFieldsCheck, gatCheck, locationCheck, imageCheck, cropCheck, timestampCheck, areaCheck].forEach(check => {
-    // A skipped check explains why it did not run. That is worth storing on the
-    // check itself, but it is not a reason for the outcome, so it stays out of
-    // the list an officer reads as "why this filing was flagged".
-    if (check.reason && check.status !== 'SKIPPED') reasons.push(check.reason);
+  [identityCheck, requiredFieldsCheck, gatCheck, locationCheck, imageCheck, duplicateCheck, cropCheck, timestampCheck, areaCheck].forEach(check => {
+    if (check.reason && check.status !== 'SKIPPED' && check.status !== 'PASS') {
+      reasons.push(check.reason);
+    }
   });
 
   const resultData = {
@@ -130,6 +148,7 @@ const runValidationEngine = async (submission, farmer, gat) => {
       location: locationCheck,
       gat: gatCheck,
       image: imageCheck,
+      duplicate: duplicateCheck,
       crop: cropCheck,
       timestamp: timestampCheck,
       area: areaCheck
