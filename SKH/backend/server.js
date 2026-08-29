@@ -24,9 +24,6 @@ if (process.env.NODE_ENV !== 'test') {
 
 const app = express();
 
-// Trust reverse proxy (Render, AWS, Heroku) for accurate IP resolution in express-rate-limit
-app.set('trust proxy', 1);
-
 // Middleware
 app.use(helmet({
   crossOriginResourcePolicy: false
@@ -46,9 +43,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { xForwardedForHeader: false }
 });
 app.use('/api', limiter);
 

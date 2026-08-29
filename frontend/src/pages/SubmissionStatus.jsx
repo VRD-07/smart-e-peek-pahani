@@ -6,6 +6,7 @@ import { Button, ValidationProgress } from '../components/common';
 import { db } from '../storage/db';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { syncPendingSubmissions } from '../services/syncService';
+import api from '../services/api';
 
 export const SubmissionStatus = () => {
   const { id } = useParams();
@@ -120,14 +121,28 @@ export const SubmissionStatus = () => {
       );
     }
 
-    if (submission?.status === 'SYNC_PENDING' && submission?.error) {
+    if ((submission?.status === 'SYNC_PENDING' || submission?.status === 'SYNC_FAILED') && submission?.error) {
       return (
-        <div className="text-center space-y-4">
-          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="text-center space-y-4 py-4">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Sync Failed</h2>
-          <p className="text-gray-500">{submission.error}</p>
+          <h2 className="text-xl font-bold text-gray-900">माहिती सबमिट करताना त्रुटी</h2>
+          <p className="text-xs text-gray-500 max-w-xs mx-auto">{submission.error}</p>
+          <button
+            type="button"
+            onClick={async () => {
+              await db.submissions.update(parseInt(id), { status: 'SYNC_PENDING', error: null });
+              setValidating(true);
+              setProgress(10);
+              await syncPendingSubmissions();
+              setValidating(false);
+            }}
+            className="mt-4 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl text-xs font-bold shadow-md transition-all inline-flex items-center justify-center gap-2 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>पुन्हा प्रयत्न करा (Retry Sync)</span>
+          </button>
         </div>
       );
     }
