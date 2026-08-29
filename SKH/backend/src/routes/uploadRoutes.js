@@ -31,6 +31,6 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
-router.post('/image', optionalAuth, multerHandler, uploadImage);
+router.post('/image', protect, multerHandler, uploadImage);
 
 module.exports = router;

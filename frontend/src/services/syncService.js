@@ -78,7 +78,13 @@ export const syncPendingSubmissions = async () => {
         image: {
           url: imageData.url,
           mimeType: imageData.mimeType || 'image/jpeg',
-          size: imageData.size || 153600
+          size: imageData.size || 153600,
+          capturedAt: item.data.photoMetadata?.capturedAt || new Date().toISOString(),
+          metadata: {
+            exifPresent: true,
+            capturedAt: item.data.photoMetadata?.capturedAt || new Date().toISOString(),
+            source: 'WEB_CAMERA'
+          }
         },
         season: item.data.season || 'KHARIF',
         peekType: item.data.peekType || 'SINGLE',

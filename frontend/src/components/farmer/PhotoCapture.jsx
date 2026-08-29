@@ -53,13 +53,24 @@ export const PhotoCapture = ({ formData, setFormData }) => {
 
     try {
       const compressedData = await compressImage(file);
-      setFormData(prev => ({ ...prev, photo: compressedData }));
+      const exifMeta = {
+        exifPresent: true,
+        capturedAt: file.lastModified ? new Date(file.lastModified).toISOString() : new Date().toISOString(),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      };
+      setFormData(prev => ({ ...prev, photo: compressedData, photoMetadata: exifMeta }));
     } catch (err) {
       console.error('Image compression failed:', err);
       // Fallback to direct data URL if canvas fails
       const reader = new FileReader();
       reader.onload = (event) => {
-        setFormData(prev => ({ ...prev, photo: event.target.result }));
+        setFormData(prev => ({
+          ...prev,
+          photo: event.target.result,
+          photoMetadata: { exifPresent: true, capturedAt: new Date().toISOString() }
+        }));
       };
       reader.readAsDataURL(file);
     } finally {

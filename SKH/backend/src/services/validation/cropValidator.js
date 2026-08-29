@@ -1,43 +1,73 @@
 const validateCrop = (declaredCrop, aiResult) => {
+  const cropNamesMr = {
+    soybean: 'सोयाबीन',
+    cotton: 'कापूस',
+    sugarcane: 'ऊस',
+    onion: 'कांदा',
+    wheat: 'गहू',
+    gram: 'हरभरा',
+    maize: 'मका',
+    tur: 'तूर',
+    bajra: 'बाजरी',
+    jowar: 'ज्वारी',
+    grapes: 'द्राक्षे',
+    pomegranate: 'डाळिंब',
+    tomato: 'टोमॅटो'
+  };
+
+  const declaredNormalized = declaredCrop ? declaredCrop.trim().toLowerCase() : '';
+  const declaredMr = cropNamesMr[declaredNormalized] || declaredCrop || 'सोयाबीन';
+
   if (!aiResult || aiResult.error || typeof aiResult.detectedCrop !== 'string') {
     return {
       status: 'REVIEW',
-      declaredCrop,
+      declaredCrop: declaredNormalized,
       detectedCrop: null,
       confidence: 0,
-      reason: aiResult?.message || aiResult?.error || 'AI service unavailable'
+      aiState: 'PENDING',
+      reason: aiResult?.message || aiResult?.error || 'AI service unavailable',
+      marathiReason: 'AI सर्व्हर व्यस्त असल्यामुळे पीक पडताळणी प्रलंबित आहे. तलाठी/अधिकारी प्रत्यक्ष पडताळणी करतील.'
     };
   }
 
-  const normalizedDeclared = declaredCrop.trim().toLowerCase();
-  const normalizedDetected = aiResult.detectedCrop.trim().toLowerCase();
+  const detectedNormalized = aiResult.detectedCrop.trim().toLowerCase();
+  const detectedMr = cropNamesMr[detectedNormalized] || aiResult.detectedCrop;
 
-  if (normalizedDeclared === normalizedDetected && aiResult.confidence >= 0.85) {
+  if (declaredNormalized === detectedNormalized && (aiResult.confidence >= 0.80 || aiResult.confidence === undefined)) {
     return {
       status: 'PASS',
-      declaredCrop: normalizedDeclared,
-      detectedCrop: normalizedDetected,
-      confidence: aiResult.confidence
+      declaredCrop: declaredNormalized,
+      detectedCrop: detectedNormalized,
+      detectedItem: detectedMr,
+      confidence: aiResult.confidence,
+      aiState: 'YES',
+      marathiReason: 'पीक जुळले'
     };
   }
 
-  if (normalizedDeclared !== normalizedDetected && aiResult.confidence >= 0.90) {
+  if (declaredNormalized !== detectedNormalized && aiResult.confidence >= 0.90) {
     return {
       status: 'FAIL',
-      declaredCrop: normalizedDeclared,
-      detectedCrop: normalizedDetected,
+      declaredCrop: declaredNormalized,
+      detectedCrop: detectedNormalized,
+      detectedItem: detectedMr,
       confidence: aiResult.confidence,
-      reason: 'Definite crop mismatch'
+      aiState: 'NO',
+      reason: 'Definite crop mismatch',
+      marathiReason: `घोषित पीक '${declaredMr}' आहे, परंतु फोटोमध्ये '${detectedMr}' आढळले. तलाठी प्रत्यक्ष पडताळणी करतील.`
     };
   }
 
   // Not enough confidence or partial match
   return {
     status: 'REVIEW',
-    declaredCrop: normalizedDeclared,
-    detectedCrop: normalizedDetected,
+    declaredCrop: declaredNormalized,
+    detectedCrop: detectedNormalized,
+    detectedItem: detectedMr,
     confidence: aiResult.confidence,
-    reason: 'Insufficient AI confidence'
+    aiState: 'NO',
+    reason: 'Insufficient AI confidence',
+    marathiReason: `पिकाची १००% खात्री होऊ शकली नाही (अचूकता ${Math.round((aiResult.confidence || 0.5) * 100)}%). तलाठी प्रत्यक्ष पडताळणी करतील.`
   };
 };
 

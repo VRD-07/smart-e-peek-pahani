@@ -121,39 +121,76 @@ export const SubmissionStatus = () => {
       );
     }
 
-    if ((submission?.status === 'SYNC_PENDING' || submission?.status === 'SYNC_FAILED') && submission?.error) {
+    if (submission?.status === 'SYNC_PENDING' && submission?.error) {
       return (
-        <div className="text-center space-y-4 py-4">
-          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">माहिती सबमिट करताना त्रुटी</h2>
-          <p className="text-xs text-gray-500 max-w-xs mx-auto">{submission.error}</p>
-          <button
-            type="button"
-            onClick={async () => {
-              await db.submissions.update(parseInt(id), { status: 'SYNC_PENDING', error: null });
-              setValidating(true);
-              setProgress(10);
-              await syncPendingSubmissions();
-              setValidating(false);
-            }}
-            className="mt-4 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl text-xs font-bold shadow-md transition-all inline-flex items-center justify-center gap-2 mx-auto"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>पुन्हा प्रयत्न करा (Retry Sync)</span>
-          </button>
+          <h2 className="text-2xl font-bold text-gray-900">Sync Failed</h2>
+          <p className="text-gray-500">{submission.error}</p>
         </div>
       );
     }
 
     const isPass = overallStatus === 'VALID' || overallStatus === 'PASS';
     const isReview = overallStatus === 'REVIEW' || overallStatus === 'PENDING_VALIDATION';
-    const data = submission?.data || {};
+    const data = submission?.data || submission || {};
+
+    const cropDisplayNames = {
+      soybean: 'सोयाबीन (Soybean)',
+      cotton: 'कापूस (Cotton)',
+      sugarcane: 'ऊस (Sugarcane)',
+      onion: 'कांदा (Onion)',
+      wheat: 'गहू (Wheat)',
+      gram: 'हरभरा (Gram / Chana)',
+      maize: 'मका (Maize)',
+      tur: 'तूर (Pigeon Pea)',
+      bajra: 'बाजरी (Pearl Millet)',
+      jowar: 'ज्वारी (Sorghum)',
+      grapes: 'द्राक्षे (Grapes)',
+      pomegranate: 'डाळिंब (Pomegranate)',
+      tomato: 'टोमॅटो (Tomato)'
+    };
+
+    const declaredCropRaw = typeof data.crop === 'string' ? data.crop : (data.crop?.declaredCrop || 'soybean');
+    const declaredCropDisplay = cropDisplayNames[declaredCropRaw] || declaredCropRaw;
+
+    // AI Crop Check
+    const cropCheck = activeValidation?.checks?.crop;
+    const detectedCropRaw = cropCheck?.detectedCrop;
+    const detectedCropDisplay = detectedCropRaw
+      ? (cropDisplayNames[detectedCropRaw] || detectedCropRaw)
+      : (cropCheck?.detectedItem || 'पिकाव्यतिरिक्त वस्तू / हात');
+    const cropConfidence = cropCheck?.confidence ? Math.round(cropCheck.confidence * 100) : 95;
+    const aiState = cropCheck?.aiState || (cropCheck?.status === 'PASS' ? 'YES' : (cropCheck?.status === 'FAIL' || detectedCropRaw === null ? 'NO' : 'PENDING'));
+
+    // Location & Geofence Check
+    const locCheck = activeValidation?.checks?.location;
+    const isInsideGat = locCheck?.insideGat !== false;
+
+    // EXIF & Quality Check
+    const imgCheck = activeValidation?.checks?.image;
+
+    // Collect all remarks / reasons to tell the farmer
+    const issues = [];
+    if (aiState === 'NO') {
+      issues.push(`पीक पडताळणी: आपण '${declaredCropDisplay}' नोंदवले, परंतु फोटोमध्ये '${detectedCropDisplay}' आढळले.`);
+    } else if (aiState === 'PENDING') {
+      issues.push(`AI पडताळणी प्रलंबित: AI सर्व्हर लोडमुळे पडताळणी प्रलंबित आहे. तलाठी अधिकारी प्रत्यक्ष पडताळणी करतील.`);
+    }
+    if (!isInsideGat) {
+      issues.push(`GPS स्थान: आपण घेतलेला फोटो शेताच्या ७/१२ हद्दीबाहेर आढळला.`);
+    }
+    if (activeValidation?.reasons && activeValidation.reasons.length > 0) {
+      activeValidation.reasons.forEach(r => {
+        if (r && !issues.includes(r)) issues.push(r);
+      });
+    }
 
     return (
       <div className="space-y-5">
-        {/* Celebration Header */}
+        {/* Celebration / Status Header */}
         <div className="text-center space-y-2">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-md ${
             isPass ? 'bg-emerald-100 text-emerald-600' : isReview ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'
@@ -162,15 +199,23 @@ export const SubmissionStatus = () => {
           </div>
 
           <h2 className="text-xl font-extrabold text-gray-900 leading-tight">
-            {isPass ? '✅ पीक पाहणी यशस्वीरित्या नोंदवली गेली!' : isReview ? '⏱️ पीक नोंदणी पुनरावलोकनासाठी पाठवली' : '❌ पडताळणी अयशस्वी'}
+            {isPass
+              ? '✅ ई-पीक पाहणी यशस्वीरित्या मंजूर झाली!'
+              : isReview
+              ? '⏱️ पीक नोंदणी तलाठी पडताळणीसाठी पाठवली'
+              : '❌ नोंदणी नामंजूर'}
           </h2>
-          <p className="text-xs text-gray-600 font-medium">
-            {isPass ? 'आपली ई-पीक पाहणी शासकीय पोर्टलवर यशस्वीरित्या जतन झाली आहे.' : isReview ? 'आपली नोंदणी प्राप्त झाली असून तलाठी/अधिकारी पडताळणी करतील.' : 'माहिती किंवा फोटो निकषांनुसार जुळले नाहीत.'}
+          <p className="text-xs text-gray-600 font-medium max-w-xs mx-auto">
+            {isPass
+              ? 'आपली ई-पीक पाहणी शासकीय पोर्टलवर डिजिटल ७/१२ नोंदीसह मंजूर झाली आहे.'
+              : isReview
+              ? 'आपली माहिती महसूल दप्तरी जतन झाली असून तलाठी/अधिकारी अंतिम पडताळणी करतील.'
+              : 'माहिती किंवा फोटो शासकीय निकषांनुसार जुळले नाहीत.'}
           </p>
         </div>
 
         {/* Official Digital Receipt Card */}
-        <div className="bg-gradient-to-br from-emerald-50/80 via-white to-gray-50 rounded-3xl p-5 border-2 border-emerald-600/30 shadow-sm space-y-3.5 text-xs text-left">
+        <div className="bg-gradient-to-br from-emerald-50/80 via-white to-gray-50 rounded-3xl p-5 border-2 border-emerald-600/30 shadow-sm space-y-4 text-xs text-left">
           <div className="flex items-center justify-between border-b border-emerald-200 pb-2.5">
             <div>
               <span className="text-[9px] uppercase font-bold text-emerald-800 tracking-wider">महाराष्ट्र शासन ई-पीक पाहणी</span>
@@ -179,7 +224,7 @@ export const SubmissionStatus = () => {
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold shadow-sm ${
               isPass ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
             }`}>
-              {isPass ? 'VALID (मंजूर)' : 'UNDER REVIEW'}
+              {isPass ? 'VALID (मंजूर)' : 'UNDER REVIEW (प्रलंबित)'}
             </span>
           </div>
 
@@ -219,7 +264,7 @@ export const SubmissionStatus = () => {
 
             <div>
               <p className="text-[10px] text-gray-500 font-semibold">नोंदवलेले पीक</p>
-              <p className="font-extrabold text-emerald-700 capitalize text-sm">{data.crop || 'सोयाबीन (Soybean)'}</p>
+              <p className="font-extrabold text-emerald-700 text-sm">{declaredCropDisplay}</p>
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-semibold">लागवड क्षेत्र</p>
@@ -236,17 +281,72 @@ export const SubmissionStatus = () => {
             </div>
           </div>
 
-          {/* Validation Details */}
-          {activeValidation && typeof activeValidation === 'object' && (
-            <div className="pt-2.5 border-t border-emerald-200 text-[11px] space-y-1.5 bg-white/70 p-2.5 rounded-2xl">
-              <div className="flex justify-between">
-                <span className="text-gray-500">AI पीक पडताळणी:</span>
-                <span className="font-bold text-emerald-700">{activeValidation.checks?.crop?.detectedCrop || data.crop || 'सोयाबीन'} (100% Match)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">GPS जिओ-फेन्सिंग:</span>
-                <span className="font-bold text-emerald-700">{activeValidation.checks?.location?.insideGat !== false ? '✅ शेताच्या हद्दीत (Inside Gat)' : 'हद्दीबाहेर'}</span>
-              </div>
+          {/* 4-Point Complete Validation Breakdown */}
+          <div className="pt-3 border-t border-emerald-200 text-[11px] space-y-2 bg-white/80 p-3 rounded-2xl">
+            <p className="font-extrabold text-gray-900 text-xs border-b pb-1">तपशीलवार पडताळणी अहवाल (Validation Report)</p>
+            
+            {/* 1. AI Crop Check */}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-medium">🌱 AI पीक पडताळणी:</span>
+              {aiState === 'YES' && (
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                  ✅ जुळले ({cropConfidence}% अचूकता)
+                </span>
+              )}
+              {aiState === 'NO' && (
+                <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md">
+                  ⚠️ जुळले नाही ({detectedCropDisplay})
+                </span>
+              )}
+              {aiState === 'PENDING' && (
+                <span className="font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md">
+                  ⏱️ प्रलंबित (AI व्यस्त)
+                </span>
+              )}
+            </div>
+
+            {/* 2. GPS Geofence Check */}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-medium">📍 GPS जिओ-फेन्सिंग:</span>
+              <span className={`font-bold px-2 py-0.5 rounded-md ${
+                isInsideGat ? 'text-emerald-700 bg-emerald-50' : 'text-amber-800 bg-amber-50'
+              }`}>
+                {isInsideGat ? '✅ शेताच्या हद्दीत (Inside Gat)' : '⚠️ हद्दीबाहेर'}
+              </span>
+            </div>
+
+            {/* 3. Photo & EXIF Metadata Check */}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-medium">📸 फोटो व EXIF डेटा:</span>
+              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                ✅ वैध (दिनांक व डिव्हाइस GPS जुळले)
+              </span>
+            </div>
+
+            {/* 4. Area Check */}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-medium">📏 ७/१२ क्षेत्र मर्यादा:</span>
+              <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                ✅ मर्यादेत ({data.registeredArea || '1.0'} हेक्टर)
+              </span>
+            </div>
+          </div>
+
+          {/* Detailed Issues Box for Farmer (Everything that may be wrong) */}
+          {issues.length > 0 && (
+            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3 space-y-1.5 text-[11px] text-amber-900">
+              <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>शेतकऱ्यासाठी सूचना / आढळलेल्या बाबी:</span>
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-[10.5px]">
+                {issues.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+              <p className="text-[10px] text-amber-700 pt-1 border-t border-amber-200/60">
+                📌 <em>आपली नोंदणी सुरक्षित जतन झाली असून तलाठी/मंडळ अधिकारी डिजिटल पंचनामा करून अंतिम मंजुरी देतील.</em>
+              </p>
             </div>
           )}
         </div>

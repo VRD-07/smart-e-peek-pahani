@@ -7,10 +7,10 @@ const env = require('../../config/env');
  */
 class StorageFactory {
   static getStorageProvider() {
-    if (env.storageProvider === 'mock') {
-      return new MockStorageProvider();
+    if (env.storageProvider === 'cloudinary') {
+      return new CloudinaryStorageProvider();
     }
-    return new CloudinaryStorageProvider();
+    return new MockStorageProvider();
   }
 }
 
