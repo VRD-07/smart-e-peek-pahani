@@ -4,8 +4,8 @@ const Submission = require('../../models/Submission');
 const CalamityZone = require('../../models/CalamityZone');
 const { validateSubmission } = require('../validation/validationService');
 const { runCalamityMatching } = require('../relief/calamityMatchingService');
-const { runEscalation } = require('../notifications/escalationService');
-const { NOTIFICATION_TYPES } = require('../notifications/constants');
+const { runEscalation, sendOnChannel } = require('../notifications/escalationService');
+const { NOTIFICATION_TYPES, ESCALATION_ACTIONS } = require('../notifications/constants');
 const { cropYear } = require('../survey/constants');
 const { DEMO_FARMER_PHONE } = require('../../../scripts/seedDemoGats');
 
@@ -367,11 +367,12 @@ async function triggerSubmissionScenario({ scenario = 'VALID', gatId = null, cro
 }
 
 /**
- * Trigger escalation demo up to the requested channel (or specific channel)
+ * Trigger escalation demo for the requested channel directly.
+ * Executes ONLY the clicked channel (WhatsApp, SMS, or Voice) without unintended escalation to other channels.
  */
 async function triggerEscalationDemo({
   phoneNumber = DEMO_FARMER_PHONE,
-  channel = 'SMS',
+  channel = 'WHATSAPP',
   type = NOTIFICATION_TYPES.DEADLINE_REMINDER,
   language = 'mr'
 }) {
@@ -384,6 +385,45 @@ async function triggerEscalationDemo({
   };
 
   const targetPhoneNumber = phoneNumber || (farmer ? farmer.phoneNumber : DEMO_FARMER_PHONE);
+  const normalizedChannel = (channel || 'WHATSAPP').toUpperCase();
+
+  // If a specific single channel is requested, dispatch ONLY to that channel
+  if (['WHATSAPP', 'SMS', 'VOICE'].includes(normalizedChannel)) {
+    const res = await sendOnChannel({
+      channel: normalizedChannel,
+      phoneNumber: targetPhoneNumber,
+      farmerId: farmer ? farmer._id : null,
+      type,
+      dedupeKey,
+      language,
+      body: bodies[normalizedChannel]
+    });
+
+    const isSuccess = res.status === ESCALATION_ACTIONS.SENT;
+
+    return {
+      channel: normalizedChannel,
+      phoneNumber: targetPhoneNumber,
+      status: res.status,
+      success: isSuccess,
+      steps: [
+        {
+          action: res.status,
+          channel: normalizedChannel,
+          reason: res.reason,
+          error: res.log?.error
+        }
+      ],
+      channelsAttempted: isSuccess ? [normalizedChannel] : [],
+      reachedVia: isSuccess ? normalizedChannel : null,
+      exhausted: !isSuccess,
+      finalAction: res.status,
+      message: isSuccess
+        ? `Successfully dispatched ${normalizedChannel} notification to ${targetPhoneNumber}`
+        : `Failed to dispatch ${normalizedChannel}: ${res.log?.error || res.reason || 'Provider error'}`,
+      details: res.log || res
+    };
+  }
 
   const result = await runEscalation({
     phoneNumber: targetPhoneNumber,
