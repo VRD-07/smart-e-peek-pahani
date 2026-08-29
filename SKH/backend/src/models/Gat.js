@@ -10,9 +10,15 @@ const gatSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  taluka: {
+    type: String,
+  },
   district: {
     type: String,
     required: true,
+  },
+  division: {
+    type: String,
   },
   cropTypes: [{
     type: String,

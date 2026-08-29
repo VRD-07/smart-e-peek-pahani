@@ -214,9 +214,9 @@ describe('WhatsApp Webhook Integration', () => {
           MediaContentType0: 'image/jpeg'
         });
 
-      // The controller generates a web bridge on READY_FOR_VALIDATION
-      expect(res.text).toContain(DICTIONARY[LANGUAGES.HI].READY);
-      expect(res.text).toContain('Submit your data securely here:');
+      // The controller generates a web receipt bridge on READY_FOR_VALIDATION
+      expect(res.text).toContain('Web Receipt');
+      expect(res.text).toContain('/submit?token=');
 
       // Verify image was saved correctly
       const session = await WhatsAppSession.findOne({ phoneNumber: sender });

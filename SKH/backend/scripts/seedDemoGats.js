@@ -62,14 +62,10 @@ async function seed(skipConnect = false) {
       const gatData = {
         gatNumber: coord.id,
         village: 'Murshatpur',
-        district: 'Nashik', // Maharashtra region for Murshatpur
+        taluka: 'Niphad',
+        district: 'Nashik',
+        division: 'Nashik',
         cropTypes: ['soybean', 'cotton', 'onion', 'sugarcane', 'wheat', 'maize'],
-        // The polygon is the whole point of the record: without it the location
-        // check fails every submission with 'Invalid polygon boundary', the area
-        // check degrades to SKIPPED, and the demo scenarios crash reading
-        // `center.latitude`. An upsert skips `required` validators, so a missing
-        // boundary here does not announce itself — it just quietly breaks
-        // everything downstream.
         boundary,
         center: { latitude: coord.lat, longitude: coord.lng },
         registeredArea: coord.registeredArea || DEFAULT_REGISTERED_AREA_HECTARES,

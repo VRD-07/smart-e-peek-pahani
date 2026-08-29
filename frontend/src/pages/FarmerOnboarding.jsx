@@ -5,6 +5,7 @@ import { Button } from '../components/common';
 import { CropSelector, LocationCard, PhotoCapture, Review } from '../components/farmer';
 import { db } from '../storage/db';
 import api from '../services/api';
+import { MAHARASHTRA_DIVISIONS } from '../data/maharashtraData';
 
 const STEPS = [
   { id: 'details', title: 'Basic Details' },
@@ -23,6 +24,18 @@ export const FarmerOnboarding = () => {
   const [farmer, setFarmer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Maharashtra Cadastral Hierarchy states
+  const [showMhSelector, setShowMhSelector] = useState(false);
+  const [selectedDivId, setSelectedDivId] = useState('NASHIK');
+  const [selectedDistId, setSelectedDistId] = useState('NASHIK_DIST');
+  const [selectedTalukaId, setSelectedTalukaId] = useState('NIPHAD');
+  const [selectedVillageName, setSelectedVillageName] = useState('Murshatpur');
+
+  const currentDivision = MAHARASHTRA_DIVISIONS.find(d => d.id === selectedDivId);
+  const currentDistrict = currentDivision?.districts.find(d => d.id === selectedDistId);
+  const currentTaluka = currentDistrict?.talukas.find(t => t.id === selectedTalukaId);
+  const currentVillage = currentTaluka?.villages.find(v => v.name === selectedVillageName);
 
   const [activeHubTab, setActiveHubTab] = useState('crop');
   const [historyList, setHistoryList] = useState([]);
@@ -186,8 +199,136 @@ export const FarmerOnboarding = () => {
                 </div>
               </div>
 
-              <h3 className="font-semibold text-gray-900 border-b pb-2 mt-4">जमीन निवडा (Select Your Land)</h3>
-              {farmer?.associatedGats?.length > 0 ? (
+              <div className="flex justify-between items-center border-b pb-2 mt-4">
+                <h3 className="font-semibold text-gray-900">जमीन निवडा (Select Your Land)</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowMhSelector(!showMhSelector)}
+                  className="text-xs text-primary-600 font-semibold hover:underline flex items-center gap-1"
+                >
+                  {showMhSelector ? 'माझे गट दाखवा' : '+ महाराष्ट्र महसूल स्थान निवडा'}
+                </button>
+              </div>
+
+              {showMhSelector && (
+                <div className="p-4 bg-primary-50/50 border border-primary-200 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary-800">
+                    <span>🏛️</span> महाराष्ट्र शासन महसूल स्थान निवड (Cadastral Selection)
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">१. महसूल विभाग (Division)</label>
+                      <select
+                        value={selectedDivId}
+                        onChange={(e) => {
+                          setSelectedDivId(e.target.value);
+                          setSelectedDistId('');
+                          setSelectedTalukaId('');
+                          setSelectedVillageName('');
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      >
+                        <option value="">-- विभाग निवडा --</option>
+                        {MAHARASHTRA_DIVISIONS.map(d => (
+                          <option key={d.id} value={d.id}>{d.nameMr} ({d.name})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">२. जिल्हा (District)</label>
+                      <select
+                        value={selectedDistId}
+                        disabled={!selectedDivId}
+                        onChange={(e) => {
+                          setSelectedDistId(e.target.value);
+                          setSelectedTalukaId('');
+                          setSelectedVillageName('');
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
+                      >
+                        <option value="">-- जिल्हा निवडा --</option>
+                        {currentDivision?.districts.map(dist => (
+                          <option key={dist.id} value={dist.id}>{dist.nameMr} ({dist.name})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">३. तालुका (Taluka)</label>
+                      <select
+                        value={selectedTalukaId}
+                        disabled={!selectedDistId}
+                        onChange={(e) => {
+                          setSelectedTalukaId(e.target.value);
+                          setSelectedVillageName('');
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
+                      >
+                        <option value="">-- तालुका निवडा --</option>
+                        {currentDistrict?.talukas.map(tal => (
+                          <option key={tal.id} value={tal.id}>{tal.nameMr} ({tal.name})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">४. गाव (Village)</label>
+                      <select
+                        value={selectedVillageName}
+                        disabled={!selectedTalukaId}
+                        onChange={(e) => setSelectedVillageName(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 disabled:opacity-50"
+                      >
+                        <option value="">-- गाव निवडा --</option>
+                        {currentTaluka?.villages.map(v => (
+                          <option key={v.name} value={v.name}>{v.nameMr} ({v.name})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {currentVillage && (
+                    <div className="pt-2 border-t border-primary-100">
+                      <label className="block text-[11px] font-medium text-gray-700 mb-1.5">५. उपलब्ध गट नंबर निवडा (Gat Number):</label>
+                      <div className="flex flex-wrap gap-2">
+                        {currentVillage.defaultGats.map(gatNum => {
+                          const matchedGat = farmer?.associatedGats?.find(g => g.gatNumber === gatNum);
+                          return (
+                            <button
+                              key={gatNum}
+                              type="button"
+                              onClick={() => {
+                                const matched = farmer?.associatedGats?.find(g => g.gatNumber === gatNum);
+                                const defaultId = matched?._id || farmer?.associatedGats?.[0]?._id;
+                                setFormData(prev => ({
+                                  ...prev,
+                                  gatId: defaultId,
+                                  village: currentVillage.name,
+                                  gat: gatNum,
+                                  district: currentDistrict?.name,
+                                  taluka: currentTaluka?.name,
+                                  division: currentDivision?.name
+                                }));
+                              }}
+                              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                formData.gat === gatNum && formData.village === currentVillage.name
+                                  ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
+                                  : 'bg-white text-gray-800 border-gray-300 hover:border-primary-500'
+                              }`}
+                            >
+                              गट क्र. {gatNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {farmer?.associatedGats?.length > 0 && !showMhSelector ? (
                 <div className="space-y-3">
                   {farmer.associatedGats.map(gat => (
                     <div
@@ -206,7 +347,7 @@ export const FarmerOnboarding = () => {
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : !showMhSelector && (
                 <p className="text-sm text-gray-500">No Gats assigned.</p>
               )}
             </div>
