@@ -74,7 +74,6 @@ async function seed(skipConnect = false) {
         { name: zone.name },
         { $set: { ...zone, declaredDate: new Date(), isActive: true } },
         { upsert: true, returnDocument: 'after' }
-      );
       console.log(`Seeded calamity zone: ${zone.name}`);
     }
 
